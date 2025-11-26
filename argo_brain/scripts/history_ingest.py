@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
-from rag_core import ingest_url
+from argo_brain.rag import ingest_url
 from youtube_ingest import ingest_youtube_url
 
 PROJECT_DIR = Path("/home/llm-argo/argo_brain")

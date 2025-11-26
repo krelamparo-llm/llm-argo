@@ -1,15 +1,23 @@
 # Argo Brain
 
-Argo Brain ingests your personal browsing data, web articles, and YouTube transcripts into a persistent Chroma vector database stored on `/mnt/d`. The scripts run inside WSL Ubuntu and talk to a local `llama-server` so you can ask grounded questions about everything you've read or watched.
+Argo Brain ingests your personal browsing data, web articles, and YouTube transcripts into a persistent Chroma vector database stored on `/mnt/d`. The scripts run inside WSL Ubuntu and talk to a local `llama-server` so you can ask grounded questions about everything you've read or watched. On top of the archival RAG store, Argo now keeps layered conversational memory so the assistant can remember short-term context, rolling summaries, and long-lived autobiographical facts.
 
 ## Project layout
 
 ```
 /home/llm-argo/argo_brain/
-├── scripts/        # Python modules and CLIs (rag_core, youtube_ingest, history_ingest)
-├── vectordb/       # Source tree placeholder; actual DB stored on /mnt/d/llm/argo_brain/vectordb
-├── data_raw/       # Placeholder; Chrome history copies actually live on /mnt/d/llm/argo_brain/data_raw
-├── config/         # Text config such as windows_username.txt
+├── argo_brain/             # Python package (config, rag, memory, assistant, etc.)
+│   ├── config.py           # Centralized paths, llama-server config, memory tunables
+│   ├── llm_client.py       # OpenAI-compatible HTTP client for llama.cpp
+│   ├── rag.py              # Retrieval + ingestion helpers shared across scripts
+│   ├── embeddings.py       # SentenceTransformer wrapper
+│   ├── memory/             # SQLite schema, prompts, MemoryManager
+│   └── assistant/          # ArgoAssistant orchestrator
+├── scripts/                # Thin CLIs (rag_core, youtube_ingest, history_ingest, chat_cli)
+├── requirements.txt        # Python dependency list
+├── vectordb/               # Placeholder; actual DB stored on /mnt/d/llm/argo_brain/vectordb
+├── data_raw/               # Placeholder; Chrome history copies live on /mnt/d/llm/argo_brain/data_raw
+├── config/                 # Text config such as windows_username.txt
 └── README.md
 ```
 
@@ -26,7 +34,7 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
 2. **Install dependencies**
 
    ```bash
-   pip install chromadb sentence-transformers trafilatura youtube-transcript-api requests
+   pip install -r requirements.txt
    ```
 
 3. **Configure the Windows username**
@@ -63,6 +71,27 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
 
 All commands run from `/home/llm-argo/argo_brain`. Scripts live in `scripts/`.
 
+### Chat with layered memory
+
+Bring up the interactive CLI to create or resume sessions backed by the new memory stack:
+
+```bash
+python3 scripts/chat_cli.py            # random session ID
+python3 scripts/chat_cli.py --session mysession123
+```
+
+Inside the REPL you can type natural language or one of the helper commands:
+
+| Command   | Description                                         |
+|-----------|-----------------------------------------------------|
+| `:new`    | Start a brand-new session (fresh short-term buffer) |
+| `:facts`  | List stored profile facts from `profile_facts`      |
+| `:summary`| Show the rolling session summary                    |
+| `:help`   | Show help                                           |
+| `:quit`   | Exit the REPL                                       |
+
+### Ingestion & RAG CLIs
+
 - **Ingest a single URL**
 
   ```bash
@@ -91,7 +120,35 @@ All commands run from `/home/llm-argo/argo_brain`. Scripts live in `scripts/`.
   python3 scripts/rag_core.py "What did I read about reinforcement learning yesterday?"
   ```
 
-## How the RAG loop works
+## Memory architecture
+
+Argo Assistant builds prompts by fusing several memory sources:
+
+1. **Short-term buffer** – The last *K* (default 6) user/assistant turns live in SQLite `messages` and are injected verbatim.
+2. **Session summary** – Every *N* messages (default 20) Argo asks the LLM to compress older context and stores it in `session_summaries`.
+3. **Autobiographical memory** – A distinct Chroma collection (`argo_autobiographical_memory`) stores long-lived facts extracted by a “memory writer” prompt. Metadata tracks `session_id`, `type`, and `source_type`.
+4. **Profile facts table** – Structured snippets (preferences, ongoing projects, etc.) are stored in SQLite `profile_facts` for quick listing or soft-deactivation.
+5. **Archival RAG store** – Existing ingestion pipelines populate the `argo_brain_memory` collection with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
+
+On each turn Argo:
+
+1. Retrieves context from all layers (`MemoryManager.get_context_for_prompt`).
+2. Builds a multi-part prompt (`ArgoAssistant.build_prompt`) containing system behavior, summary/memory snippets, recent conversation, and the new user message.
+3. Calls `llama-server` through the OpenAI-compatible HTTP API.
+4. Writes the new messages to SQLite, updates the running summary if due, and runs the memory-writer prompt to persist any durable facts to both SQLite and the autobiographical Chroma collection.
+
+All prompt text lives in `argo_brain/memory/prompts.py` if you want to tweak tone or extraction heuristics.
+
+## Data locations & initialization
+
+- **Vector DB** – Configured via `argo_brain.config.CONFIG`. Defaults to `/mnt/d/llm/argo_brain/vectordb`. Created automatically by Chroma on first write.
+- **Autobiographical collection** – Stored alongside the RAG DB under the name `argo_autobiographical_memory`.
+- **SQLite state** – Default path `/mnt/d/llm/argo_brain/state/argo_memory.sqlite3`. The schema is created automatically when `MemoryDB` is instantiated, so no manual migration steps are required—just ensure the parent directory exists or leave the defaults and the package will create it.
+- **Raw Chrome data** – `/mnt/d/llm/argo_brain/data_raw`. The history ingest script handles copying/locking.
+
+You can customize any of these paths via environment variables (`ARGO_STORAGE_ROOT`, `ARGO_VECTOR_DB_PATH`, `ARGO_SQLITE_PATH`, etc.) before launching the scripts.
+
+## How the archival RAG loop works
 
 1. **Ingest** – Scripts fetch content (web article, YouTube transcript, or Chrome history URL) and clean the text with `trafilatura`.
 2. **Embed** – Text chunks are embedded via `sentence-transformers` (`BAAI/bge-m3`).
@@ -109,3 +166,17 @@ All commands run from `/home/llm-argo/argo_brain`. Scripts live in `scripts/`.
 
 - If `sentence-transformers` downloads models slowly, manually download them to `/mnt/d` and point the `HF_HOME` env var there.
 - If llama-server refuses connections, verify it is bound to `127.0.0.1:8080` and that you provided an `Authorization` header (any token works).
+
+## Requirements
+
+Python dependencies are listed in `requirements.txt`. Install them via:
+
+```bash
+pip install -r requirements.txt
+```
+
+Additional system requirements:
+
+- Python 3.10+ inside WSL2 Ubuntu.
+- llama.cpp / `llama-server` running locally (see Setup).
+- Access to `/mnt/c` Chrome profile and `/mnt/d` storage for the DB/state directories.

@@ -1,0 +1,5 @@
+chromadb
+sentence-transformers
+trafilatura
+youtube-transcript-api
+requests

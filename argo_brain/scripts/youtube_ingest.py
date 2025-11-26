@@ -15,7 +15,7 @@ from youtube_transcript_api import (
     YouTubeTranscriptApi,
 )
 
-from rag_core import ingest_text
+from argo_brain.rag import ingest_text
 
 YOUTUBE_ID_PATTERN = re.compile(
     r"(?:v=|youtu\.be/|youtube\.com/shorts/)([A-Za-z0-9_-]{11})"
