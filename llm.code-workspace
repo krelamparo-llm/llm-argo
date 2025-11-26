@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "../llm"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}
