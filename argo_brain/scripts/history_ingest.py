@@ -1,5 +1,9 @@
 """
 Chrome history ingestion pipeline for Argo Brain.
+
+Copies history from /mnt/c/Users/<WINDOWS_USERNAME>/... into
+/mnt/d/llm/argo_brain/data_raw and reads config from
+/home/llm-argo/argo_brain/config.
 """
 
 from __future__ import annotations
@@ -10,14 +14,15 @@ import shutil
 import sqlite3
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from rag_core import ingest_url
 from youtube_ingest import ingest_youtube_url
 
-BASE_DIR = Path("/mnt/d/llm/argo_brain")
-DATA_RAW_DIR = BASE_DIR / "data_raw"
-CONFIG_DIR = BASE_DIR / "config"
+PROJECT_DIR = Path("/home/llm-argo/argo_brain")
+STORAGE_DIR = Path("/mnt/d/llm/argo_brain")
+CONFIG_DIR = PROJECT_DIR / "config"
+DATA_RAW_DIR = STORAGE_DIR / "data_raw"
 STATE_PATH = DATA_RAW_DIR / "history_state.json"
 HISTORY_COPY_PATH = DATA_RAW_DIR / "chrome_history_copy"
 WINDOWS_USERNAME_FILE = CONFIG_DIR / "windows_username.txt"

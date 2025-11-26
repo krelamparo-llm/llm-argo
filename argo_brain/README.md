@@ -5,10 +5,10 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
 ## Project layout
 
 ```
-/mnt/d/llm/argo_brain/
+/home/llm-argo/argo_brain/
 ├── scripts/        # Python modules and CLIs (rag_core, youtube_ingest, history_ingest)
-├── vectordb/       # Persistent Chroma database
-├── data_raw/       # Chrome history copy plus ingestion state
+├── vectordb/       # Source tree placeholder; actual DB stored on /mnt/d/llm/argo_brain/vectordb
+├── data_raw/       # Placeholder; Chrome history copies actually live on /mnt/d/llm/argo_brain/data_raw
 ├── config/         # Text config such as windows_username.txt
 └── README.md
 ```
@@ -18,7 +18,7 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
 1. **Create a Python virtual environment**
 
    ```bash
-   cd /mnt/d/llm/argo_brain
+   cd /home/llm-argo/argo_brain
    python3 -m venv .venv
    source .venv/bin/activate
    ```
@@ -37,12 +37,12 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
    export WINDOWS_USERNAME="YourWindowsUser"
    ```
 
-   or create `/mnt/d/llm/argo_brain/config/windows_username.txt` with a single line containing the username that appears under `C:\Users\`.
+   or create `/home/llm-argo/argo_brain/config/windows_username.txt` with a single line containing the username that appears under `C:\Users\`.
 
 4. **Start `llama-server` (example)**
 
    ```bash
-   cd /mnt/d/llm/models/llama.cpp
+   cd /home/llm-argo/llama.cpp
    ./llama-server \
      -m /mnt/d/llm/models/Qwen3-32B/qwen3-32b-q5_k_m.gguf \
      -c 4096 \
@@ -57,10 +57,11 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
    - `-ngl` controls GPU layers (tune for the RTX 5090).
    - `-t` sets CPU threads (Ryzen 9 has plenty of cores).
    - `--port/--host` expose an OpenAI-compatible API at `http://127.0.0.1:8080/v1/chat/completions`.
+   - Running from `/home/llm-argo/llama.cpp` keeps the llama.cpp binaries in the WSL home directory while models remain on the large `/mnt/d` drive.
 
 ## Usage
 
-All commands run from `/mnt/d/llm/argo_brain`. Scripts live in `scripts/`.
+All commands run from `/home/llm-argo/argo_brain`. Scripts live in `scripts/`.
 
 - **Ingest a single URL**
 
@@ -82,7 +83,7 @@ All commands run from `/mnt/d/llm/argo_brain`. Scripts live in `scripts/`.
 
   The script copies the locked Windows Chrome history DB from
   `/mnt/c/Users/<WINDOWS_USERNAME>/AppData/Local/Google/Chrome/User Data/Default/History`
-  into `/mnt/d/llm/argo_brain/data_raw/chrome_history_copy`, queries only entries newer than the last recorded timestamp in `data_raw/history_state.json`, and ingests each URL. YouTube URLs are delegated to the transcript ingestor automatically.
+  into `/mnt/d/llm/argo_brain/data_raw/chrome_history_copy`, queries only entries newer than the last recorded timestamp in `/mnt/d/llm/argo_brain/data_raw/history_state.json`, and ingests each URL. YouTube URLs are delegated to the transcript ingestor automatically.
 
 - **Ask a question using RAG**
 

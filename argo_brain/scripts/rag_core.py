@@ -18,8 +18,8 @@ from chromadb.api.models.Collection import Collection
 from requests import Response
 from sentence_transformers import SentenceTransformer
 
-BASE_DIR = Path("/mnt/d/llm/argo_brain")
-VECTOR_DB_DIR = BASE_DIR / "vectordb"
+STORAGE_ROOT = Path("/mnt/d/llm/argo_brain")
+VECTOR_DB_DIR = STORAGE_ROOT / "vectordb"
 COLLECTION_NAME = "argo_brain_memory"
 LLM_ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
 
