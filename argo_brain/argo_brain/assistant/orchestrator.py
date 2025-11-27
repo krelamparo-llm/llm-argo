@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from ..config import CONFIG
 from ..llm_client import ChatMessage, LLMClient
@@ -21,6 +22,9 @@ class AssistantResponse:
 
     text: str
     context: MemoryContext
+    thought: Optional[str] = None
+    raw_text: Optional[str] = None
+    prompt_messages: Optional[List[ChatMessage]] = None
 
 
 class ArgoAssistant:
@@ -68,15 +72,41 @@ class ArgoAssistant:
         messages.append(ChatMessage(role="user", content=user_message))
         return messages
 
-    def send_message(self, session_id: str, user_message: str) -> AssistantResponse:
+    def _split_think(self, response_text: str) -> tuple[Optional[str], str]:
+        """Extract optional <think>...</think> content and return (think, final_text)."""
+
+        match = re.search(r"<think>(.*?)</think>", response_text, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            cleaned = response_text.replace("<final>", "").replace("</final>", "").strip()
+            return None, cleaned
+        think_text = match.group(1).strip()
+        final_text = (response_text[: match.start()] + response_text[match.end() :]).strip()
+        final_text = final_text.replace("<final>", "").replace("</final>", "").strip()
+        return think_text or None, final_text
+
+    def send_message(
+        self,
+        session_id: str,
+        user_message: str,
+        *,
+        return_prompt: bool = False,
+    ) -> AssistantResponse:
         """Process a new user message and return the assistant output."""
 
         self.memory_manager.ensure_session(session_id)
         context = self.memory_manager.get_context_for_prompt(session_id, user_message)
         prompt_messages = self.build_prompt(context, user_message)
         response_text = self.llm_client.chat(prompt_messages)
-        self.memory_manager.record_interaction(session_id, user_message, response_text)
-        return AssistantResponse(text=response_text, context=context)
+        thought, final_text = self._split_think(response_text)
+        # Persist the cleaned final text so summaries/memories stay concise.
+        self.memory_manager.record_interaction(session_id, user_message, final_text)
+        return AssistantResponse(
+            text=final_text,
+            context=context,
+            thought=thought,
+            raw_text=response_text,
+            prompt_messages=prompt_messages if return_prompt else None,
+        )
 
     def list_profile_facts(self) -> str:
         """Return a formatted string of stored profile facts."""
