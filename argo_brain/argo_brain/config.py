@@ -5,20 +5,58 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import Any, Dict, Final
+
+try:  # Python 3.11+
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - fallback for 3.10
+    import tomli as tomllib
 
 PROJECT_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+DEFAULT_CONFIG_PATH = Path(os.environ.get("ARGO_CONFIG_FILE", PROJECT_ROOT / "argo.toml"))
 
-DEFAULT_STORAGE_ROOT = Path(os.environ.get("ARGO_STORAGE_ROOT", "/mnt/d/llm/argo_brain"))
-DEFAULT_STATE_DIR = Path(os.environ.get("ARGO_STATE_DIR", DEFAULT_STORAGE_ROOT / "state"))
-DEFAULT_VECTOR_DB_PATH = Path(
-    os.environ.get("ARGO_VECTOR_DB_PATH", DEFAULT_STORAGE_ROOT / "vectordb")
-)
-DEFAULT_DATA_RAW_PATH = Path(
-    os.environ.get("ARGO_DATA_RAW_PATH", DEFAULT_STORAGE_ROOT / "data_raw")
-)
-DEFAULT_SQLITE_PATH = Path(
-    os.environ.get("ARGO_SQLITE_PATH", DEFAULT_STATE_DIR / "argo_memory.sqlite3")
+
+def _load_config_data() -> Dict[str, Any]:
+    if DEFAULT_CONFIG_PATH.exists():
+        with DEFAULT_CONFIG_PATH.open("rb") as fh:
+            return tomllib.load(fh)
+    return {}
+
+
+_CONFIG_DATA = _load_config_data()
+
+
+def _get_data_setting(name: str, default: str) -> str:
+    env_key = f"ARGO_{name.upper()}"
+    if env_key in os.environ:
+        return os.environ[env_key]
+    data_section = _CONFIG_DATA.get("data", {})
+    return str(data_section.get(name, default))
+
+
+def _get_vector_store_setting(name: str, default: str) -> str:
+    env_key = f"ARGO_VECTOR_STORE_{name.upper()}"
+    if env_key in os.environ:
+        return os.environ[env_key]
+    section = _CONFIG_DATA.get("vector_store", {})
+    return str(section.get(name, default))
+
+
+def _get_llm_setting(name: str, default: str) -> str:
+    env_key = f"ARGO_LLM_{name.upper()}"
+    if env_key in os.environ:
+        return os.environ[env_key]
+    section = _CONFIG_DATA.get("llm", {})
+    return str(section.get(name, default))
+
+
+DATA_ROOT = Path(_get_data_setting("root", "/mnt/d/llm/argo_brain"))
+STATE_DIR = Path(_get_data_setting("state_dir", str(DATA_ROOT / "state")))
+VECTOR_DB_PATH = Path(_get_vector_store_setting("path", str(DATA_ROOT / "vectordb")))
+DATA_RAW_PATH = Path(_get_data_setting("data_raw_path", str(DATA_ROOT / "data_raw")))
+MODELS_ROOT = Path(_get_data_setting("models_root", "/mnt/d/llm/models"))
+SQLITE_PATH = Path(
+    os.environ.get("ARGO_SQLITE_PATH", STATE_DIR / "argo_memory.sqlite3")
 )
 
 DEFAULT_RAG_COLLECTION = os.environ.get("ARGO_RAG_COLLECTION", "argo_brain_memory")
@@ -29,10 +67,8 @@ DEFAULT_WEB_CACHE_COLLECTION = os.environ.get(
     "ARGO_WEB_CACHE_COLLECTION", "argo_web_cache"
 )
 DEFAULT_EMBED_MODEL = os.environ.get("ARGO_EMBED_MODEL", "BAAI/bge-m3")
-DEFAULT_LLAMA_URL = os.environ.get(
-    "LLAMA_SERVER_URL", "http://127.0.0.1:8080/v1/chat/completions"
-)
-DEFAULT_LLAMA_MODEL = os.environ.get("LLAMA_MODEL_NAME", "local-llm")
+DEFAULT_LLAMA_URL = _get_llm_setting("base_url", "http://127.0.0.1:8080/v1/chat/completions")
+DEFAULT_LLAMA_MODEL = _get_llm_setting("model", "local-llm")
 
 
 @dataclass(frozen=True)
@@ -63,11 +99,14 @@ class LLMConfig:
 class Paths:
     """Filesystem paths used throughout the project."""
 
-    storage_root: Path = DEFAULT_STORAGE_ROOT
-    state_dir: Path = DEFAULT_STATE_DIR
-    vector_db_path: Path = DEFAULT_VECTOR_DB_PATH
-    data_raw_path: Path = DEFAULT_DATA_RAW_PATH
-    sqlite_path: Path = DEFAULT_SQLITE_PATH
+    project_root: Path = PROJECT_ROOT
+    data_root: Path = DATA_ROOT
+    state_dir: Path = STATE_DIR
+    vector_db_path: Path = VECTOR_DB_PATH
+    data_raw_path: Path = DATA_RAW_PATH
+    models_root: Path = MODELS_ROOT
+    sqlite_path: Path = SQLITE_PATH
+    config_file: Path = DEFAULT_CONFIG_PATH
 
 
 @dataclass(frozen=True)
@@ -80,6 +119,14 @@ class Collections:
 
 
 @dataclass(frozen=True)
+class VectorStoreConfig:
+    """Vector store backend settings."""
+
+    backend: str = _get_vector_store_setting("backend", "chroma")
+    path: Path = VECTOR_DB_PATH
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Aggregate configuration for the Argo Brain runtime."""
 
@@ -88,10 +135,16 @@ class AppConfig:
     memory: MemoryConfig = MemoryConfig()
     llm: LLMConfig = LLMConfig()
     embed_model: str = DEFAULT_EMBED_MODEL
+    vector_store: VectorStoreConfig = VectorStoreConfig()
 
 
 CONFIG: Final[AppConfig] = AppConfig()
 
 # Ensure important directories exist at import time.
-CONFIG.paths.state_dir.mkdir(parents=True, exist_ok=True)
-CONFIG.paths.vector_db_path.mkdir(parents=True, exist_ok=True)
+for required_path in [
+    CONFIG.paths.data_root,
+    CONFIG.paths.state_dir,
+    CONFIG.paths.vector_db_path,
+    CONFIG.paths.data_raw_path,
+]:
+    required_path.mkdir(parents=True, exist_ok=True)

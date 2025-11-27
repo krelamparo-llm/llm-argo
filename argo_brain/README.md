@@ -31,13 +31,35 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
    source .venv/bin/activate
    ```
 
-2. **Install dependencies**
+2. **Review `argo.toml` configuration**
+
+   The repository ships with an `argo.toml` file at the project root. It controls storage paths, model endpoints, and vector-store settings:
+
+   ```toml
+   [data]
+   root = "/mnt/d/llm/argo_brain"
+   state_dir = "/mnt/d/llm/argo_brain/state"
+   data_raw_path = "/mnt/d/llm/argo_brain/data_raw"
+   models_root = "/mnt/d/llm/models"
+
+   [vector_store]
+   backend = "chroma"
+   path = "/mnt/d/llm/argo_brain/vectordb"
+
+   [llm]
+   base_url = "http://127.0.0.1:8080/v1/chat/completions"
+   model = "local-llm"
+   ```
+
+   Adjust paths as needed for your machine (or override via `ARGO_*` environment variables) before running any scripts.
+
+3. **Install dependencies**
 
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Configure the Windows username**
+4. **Configure the Windows username**
 
    Either export `WINDOWS_USERNAME` before running the history ingest script:
 
@@ -47,7 +69,7 @@ Argo Brain ingests your personal browsing data, web articles, and YouTube transc
 
    or create `/home/llm-argo/argo_brain/config/windows_username.txt` with a single line containing the username that appears under `C:\Users\`.
 
-4. **Start `llama-server` (example)**
+5. **Start `llama-server` (example)**
 
    ```bash
    cd /home/llm-argo/llama.cpp
@@ -135,6 +157,8 @@ Argo Assistant builds prompts by fusing several memory sources:
 6. **Tool results** – Structured outputs from registered tools (e.g., live web access) are kept as first-class context items so prompts can cite them explicitly before they are persisted anywhere.
 7. **Web cache** – Live browsing/tool outputs can be summarized into a dedicated collection (`argo_web_cache`) with provenance metadata (`source_type="live_web"`, `url`, `fetched_at`, `session_id`) so the assistant can re-use recent lookups without polluting autobiographical memory.
 8. **Archival RAG store** – Existing ingestion pipelines populate the `argo_brain_memory` collection with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
+
+Under the hood the vector store is accessed through a small interface defined in `argo_brain.vector_store`. The default backend is Chroma (embedded, local-first), but the adapter keeps each namespace (`autobiographical`, `web_cache`, `argo_brain_memory`, etc.) isolated so you can swap in LanceDB or Qdrant later without rewriting ingestion code.
 
 On each turn Argo:
 

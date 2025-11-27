@@ -1,0 +1,13 @@
+[data]
+root = "/mnt/d/llm/argo_brain"
+state_dir = "/mnt/d/llm/argo_brain/state"
+data_raw_path = "/mnt/d/llm/argo_brain/data_raw"
+models_root = "/mnt/d/llm/models"
+
+[vector_store]
+backend = "chroma"
+path = "/mnt/d/llm/argo_brain/vectordb"
+
+[llm]
+base_url = "http://127.0.0.1:8080/v1/chat/completions"
+model = "local-llm"

@@ -9,14 +9,12 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from chromadb import PersistentClient
-from chromadb.api.models.Collection import Collection
-
 from ..config import CONFIG
 from ..embeddings import embed_single, embed_texts
 from ..llm_client import ChatMessage, LLMClient
 from ..rag import RetrievedChunk, ingest_web_result, retrieve_knowledge
 from ..tools.base import ToolRequest, ToolResult
+from ..vector_store import get_vector_store
 from .db import MemoryDB, MessageRecord, ProfileFact, ToolRunRecord
 from .prompts import (
     MEMORY_WRITER_INSTRUCTIONS,
@@ -59,11 +57,7 @@ class MemoryManager:
         self.llm_client = llm_client or LLMClient()
         self.config = CONFIG
         self.logger = logging.getLogger("argo_brain.memory")
-        self._chroma_client = PersistentClient(path=str(self.config.paths.vector_db_path))
-        self._autobio_collection = self._chroma_client.get_or_create_collection(
-            name=self.config.collections.autobiographical,
-            metadata={"description": "Argo autobiographical memory"},
-        )
+        self.vector_store = get_vector_store()
 
     # ---- Session helpers -------------------------------------------------
     def ensure_session(self, session_id: str) -> None:
@@ -128,14 +122,15 @@ class MemoryManager:
         embedding = embed_single(query)
         if not embedding:
             return []
-        response = self._autobio_collection.query(
+        response = self.vector_store.query(
+            collection=self.config.collections.autobiographical,
             query_embeddings=[embedding],
             n_results=top_k,
         )
-        docs = response.get("documents", [[]])[0]
-        metas = response.get("metadatas", [[]])[0]
-        ids = response.get("ids", [[]])[0]
-        distances = response.get("distances", [[]])[0]
+        docs = response.documents
+        metas = response.metadatas
+        ids = response.ids
+        distances = response.distances
         chunks: List[AutobiographicalChunk] = []
         for doc, meta, chunk_id, dist in zip(docs, metas, ids, distances):
             chunks.append(
@@ -268,11 +263,12 @@ class MemoryManager:
     def _store_autobiographical_memories(self, texts: List[str], metadatas: List[Dict[str, str]]) -> None:
         embeddings = embed_texts(texts)
         ids = [f"auto:{uuid4().hex}" for _ in texts]
-        self._autobio_collection.upsert(
+        self.vector_store.add(
+            collection=self.config.collections.autobiographical,
             ids=ids,
+            embeddings=embeddings,
             documents=texts,
             metadatas=metadatas,
-            embeddings=embeddings,
         )
 
     # ---- Profile facts ---------------------------------------------------

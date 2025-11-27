@@ -1,10 +1,4 @@
-"""
-Chrome history ingestion pipeline for Argo Brain.
-
-Copies history from /mnt/c/Users/<WINDOWS_USERNAME>/... into
-/mnt/d/llm/argo_brain/data_raw and reads config from
-/home/llm-argo/argo_brain/config.
-"""
+"""Chrome history ingestion pipeline for Argo Brain."""
 
 from __future__ import annotations
 
@@ -20,13 +14,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from argo_brain.config import CONFIG
 from argo_brain.rag import ingest_url
 from youtube_ingest import ingest_youtube_url
 
-PROJECT_DIR = Path("/home/llm-argo/argo_brain")
-STORAGE_DIR = Path("/mnt/d/llm/argo_brain")
+PROJECT_DIR = CONFIG.paths.project_root
 CONFIG_DIR = PROJECT_DIR / "config"
-DATA_RAW_DIR = STORAGE_DIR / "data_raw"
+DATA_RAW_DIR = CONFIG.paths.data_raw_path
 STATE_PATH = DATA_RAW_DIR / "history_state.json"
 HISTORY_COPY_PATH = DATA_RAW_DIR / "chrome_history_copy"
 WINDOWS_USERNAME_FILE = CONFIG_DIR / "windows_username.txt"
@@ -52,15 +46,7 @@ def get_windows_username() -> str:
 
 
 def copy_history_db(username: str) -> Path:
-    """
-    Copy the locked Chrome History database into /mnt/d for safe querying.
-
-    Args:
-        username: Windows account name used in /mnt/c/Users/<username>.
-
-    Returns:
-        Path to the copied SQLite DB file.
-    """
+    """Copy the locked Chrome History database into the data_raw directory."""
 
     source = (
         Path("/mnt/c/Users")

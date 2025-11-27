@@ -5,21 +5,17 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 from uuid import uuid4
 
 import requests
 import trafilatura
-from chromadb import PersistentClient
-from chromadb.api.models.Collection import Collection
 
 from .config import CONFIG
 from .embeddings import embed_texts
 from .llm_client import ChatMessage, LLMClient
-
-_CHROMA_CLIENT: Optional[PersistentClient] = None
-_COLLECTION_CACHE: Dict[str, Collection] = {}
+from .vector_store import QueryResult, get_vector_store
+_VECTOR_STORE = get_vector_store()
 
 
 @dataclass
@@ -30,24 +26,6 @@ class RetrievedChunk:
     metadata: Dict[str, Any]
     chunk_id: str
     distance: Optional[float] = None
-
-
-def _get_collection(name: Optional[str] = None) -> Collection:
-    """Return (creating if necessary) a named Chroma collection."""
-
-    global _CHROMA_CLIENT
-    paths = CONFIG.paths
-    if _CHROMA_CLIENT is None:
-        paths.vector_db_path.mkdir(parents=True, exist_ok=True)
-        _CHROMA_CLIENT = PersistentClient(path=str(paths.vector_db_path))
-    collection_name = name or CONFIG.collections.rag
-    if collection_name not in _COLLECTION_CACHE:
-        metadata = {"description": f"Argo Brain collection: {collection_name}"}
-        _COLLECTION_CACHE[collection_name] = _CHROMA_CLIENT.get_or_create_collection(
-            name=collection_name,
-            metadata=metadata,
-        )
-    return _COLLECTION_CACHE[collection_name]
 
 
 def split_text(text: str, chunk_size: int = 800, overlap: int = 200) -> List[str]:
@@ -84,7 +62,6 @@ def ingest_text(
         raise ValueError("No usable text found to ingest.")
 
     embeddings = embed_texts(chunks)
-    collection = _get_collection(collection_name)
     timestamp = int(time.time())
     metadatas: List[Dict[str, Any]] = []
     ids: List[str] = []
@@ -102,7 +79,14 @@ def ingest_text(
         metadatas.append(metadata)
         ids.append(f"{source_id}:{timestamp}:{idx}:{uuid4().hex[:8]}")
 
-    collection.upsert(ids=ids, documents=chunks, metadatas=metadatas, embeddings=embeddings)
+    target_collection = collection_name or CONFIG.collections.rag
+    _VECTOR_STORE.add(
+        collection=target_collection,
+        ids=ids,
+        embeddings=embeddings,
+        documents=chunks,
+        metadatas=metadatas,
+    )
 
 
 def _fetch_html(url: str, timeout: int = 25) -> str:
@@ -162,12 +146,17 @@ def retrieve_knowledge(
 ) -> List[RetrievedChunk]:
     """Retrieve semantically similar chunks for a query."""
 
-    collection = _get_collection(collection_name)
-    response = collection.query(query_texts=[query], n_results=top_k, where=filters)
-    documents = response.get("documents", [[]])[0]
-    metadatas = response.get("metadatas", [[]])[0]
-    ids = response.get("ids", [[]])[0]
-    distances = response.get("distances", [[]])[0]
+    target_collection = collection_name or CONFIG.collections.rag
+    response = _VECTOR_STORE.query(
+        collection=target_collection,
+        query_texts=[query],
+        n_results=top_k,
+        filters=filters,
+    )
+    documents = response.documents
+    metadatas = response.metadatas
+    ids = response.ids
+    distances = response.distances
 
     chunks: List[RetrievedChunk] = []
     for doc, meta, chunk_id, dist in zip(documents, metadatas, ids, distances):
