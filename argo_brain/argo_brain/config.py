@@ -25,6 +25,9 @@ DEFAULT_RAG_COLLECTION = os.environ.get("ARGO_RAG_COLLECTION", "argo_brain_memor
 DEFAULT_AUTOBIO_COLLECTION = os.environ.get(
     "ARGO_AUTOBIO_COLLECTION", "argo_autobiographical_memory"
 )
+DEFAULT_WEB_CACHE_COLLECTION = os.environ.get(
+    "ARGO_WEB_CACHE_COLLECTION", "argo_web_cache"
+)
 DEFAULT_EMBED_MODEL = os.environ.get("ARGO_EMBED_MODEL", "BAAI/bge-m3")
 DEFAULT_LLAMA_URL = os.environ.get(
     "LLAMA_SERVER_URL", "http://127.0.0.1:8080/v1/chat/completions"
@@ -71,6 +74,7 @@ class Collections:
 
     rag: str = DEFAULT_RAG_COLLECTION
     autobiographical: str = DEFAULT_AUTOBIO_COLLECTION
+    web_cache: str = DEFAULT_WEB_CACHE_COLLECTION
 
 
 @dataclass(frozen=True)

@@ -81,6 +81,18 @@ class MemoryDB:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     is_active INTEGER NOT NULL DEFAULT 1
                 );
+
+                CREATE TABLE IF NOT EXISTS tool_runs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    tool_name TEXT NOT NULL,
+                    input_payload TEXT NOT NULL,
+                    output_ref TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_tool_runs_session_created
+                    ON tool_runs(session_id, created_at DESC);
                 """
             )
 
@@ -194,3 +206,47 @@ class MemoryDB:
                 "UPDATE profile_facts SET is_active = ? WHERE id = ?",
                 (1 if is_active else 0, fact_id),
             )
+
+    def log_tool_run(
+        self,
+        session_id: str,
+        tool_name: str,
+        input_payload: str,
+        output_ref: Optional[str] = None,
+    ) -> int:
+        """Persist a tool invocation for traceability."""
+
+        self.ensure_session(session_id)
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO tool_runs(session_id, tool_name, input_payload, output_ref)
+                VALUES (?, ?, ?, ?)
+                """,
+                (session_id, tool_name, input_payload, output_ref),
+            )
+            return int(cursor.lastrowid)
+
+    def recent_tool_runs(self, session_id: str, limit: int = 10) -> List[ToolRunRecord]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, session_id, tool_name, input_payload, output_ref, created_at
+                FROM tool_runs
+                WHERE session_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+        return [ToolRunRecord(**dict(row)) for row in rows]
+@dataclass
+class ToolRunRecord:
+    """Represents a logged tool execution."""
+
+    id: int
+    session_id: str
+    tool_name: str
+    input_payload: str
+    output_ref: Optional[str]
+    created_at: str

@@ -15,8 +15,8 @@ from chromadb.api.models.Collection import Collection
 from ..config import CONFIG
 from ..embeddings import embed_single, embed_texts
 from ..llm_client import ChatMessage, LLMClient
-from ..rag import RetrievedChunk, retrieve_knowledge
-from .db import MemoryDB, MessageRecord, ProfileFact
+from ..rag import RetrievedChunk, ingest_web_result, retrieve_knowledge
+from .db import MemoryDB, MessageRecord, ProfileFact, ToolRunRecord
 from .prompts import (
     MEMORY_WRITER_INSTRUCTIONS,
     SESSION_SUMMARY_INSTRUCTIONS,
@@ -42,6 +42,7 @@ class MemoryContext:
     session_summary: Optional[str]
     autobiographical_chunks: List[AutobiographicalChunk]
     rag_chunks: List[RetrievedChunk]
+    web_cache_chunks: List[RetrievedChunk]
 
 
 class MemoryManager:
@@ -74,7 +75,16 @@ class MemoryManager:
         short_term = self.db.get_recent_messages(session_id, mem_cfg.short_term_window)
         summary = self.db.get_session_summary(session_id)
         auto_chunks = self._retrieve_autobiographical(user_message, mem_cfg.autobiographical_k)
-        rag_chunks = retrieve_knowledge(user_message, top_k=mem_cfg.rag_k)
+        rag_chunks = retrieve_knowledge(
+            user_message,
+            top_k=mem_cfg.rag_k,
+            collection_name=self.config.collections.rag,
+        )
+        web_cache_chunks = retrieve_knowledge(
+            user_message,
+            top_k=max(3, mem_cfg.rag_k // 2),
+            collection_name=self.config.collections.web_cache,
+        )
         self.logger.info(
             "Prepared context",
             extra={
@@ -82,6 +92,7 @@ class MemoryManager:
                 "short_term": len(short_term),
                 "auto_chunks": len(auto_chunks),
                 "rag_chunks": len(rag_chunks),
+                "web_cache_chunks": len(web_cache_chunks),
                 "has_summary": bool(summary),
             },
         )
@@ -90,6 +101,7 @@ class MemoryManager:
             session_summary=summary,
             autobiographical_chunks=auto_chunks,
             rag_chunks=rag_chunks,
+            web_cache_chunks=web_cache_chunks,
         )
 
     def _retrieve_autobiographical(self, query: str, top_k: int) -> List[AutobiographicalChunk]:
@@ -240,3 +252,39 @@ class MemoryManager:
 
     def set_profile_fact_active(self, fact_id: int, is_active: bool) -> None:
         self.db.set_profile_fact_active(fact_id, is_active)
+
+    # ---- Tooling --------------------------------------------------------
+    def log_tool_run(
+        self,
+        session_id: str,
+        tool_name: str,
+        input_payload: str,
+        output_ref: Optional[str] = None,
+    ) -> int:
+        """Persist a tool invocation to SQLite."""
+
+        return self.db.log_tool_run(session_id, tool_name, input_payload, output_ref)
+
+    def recent_tool_runs(self, session_id: str, limit: int = 10):
+        return self.db.recent_tool_runs(session_id, limit=limit)
+
+    def cache_web_result(
+        self,
+        *,
+        session_id: str,
+        content: str,
+        url: str,
+        query_id: Optional[str] = None,
+        extra_meta: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Store a snippet fetched from the live web into the web cache collection."""
+
+        meta = extra_meta or {}
+        source_id = meta.get("source_id", url)
+        ingest_web_result(
+            content,
+            source_id=source_id,
+            url=url,
+            query_id=query_id,
+            extra_meta={**meta, "session_id": session_id},
+        )

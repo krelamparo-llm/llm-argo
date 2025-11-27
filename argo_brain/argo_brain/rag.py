@@ -19,7 +19,7 @@ from .embeddings import embed_texts
 from .llm_client import ChatMessage, LLMClient
 
 _CHROMA_CLIENT: Optional[PersistentClient] = None
-_RAG_COLLECTION: Optional[Collection] = None
+_COLLECTION_CACHE: Dict[str, Collection] = {}
 
 
 @dataclass
@@ -32,20 +32,22 @@ class RetrievedChunk:
     distance: Optional[float] = None
 
 
-def _get_collection() -> Collection:
-    """Return (creating if necessary) the primary RAG Chroma collection."""
+def _get_collection(name: Optional[str] = None) -> Collection:
+    """Return (creating if necessary) a named Chroma collection."""
 
-    global _CHROMA_CLIENT, _RAG_COLLECTION
+    global _CHROMA_CLIENT
     paths = CONFIG.paths
     if _CHROMA_CLIENT is None:
         paths.vector_db_path.mkdir(parents=True, exist_ok=True)
         _CHROMA_CLIENT = PersistentClient(path=str(paths.vector_db_path))
-    if _RAG_COLLECTION is None:
-        _RAG_COLLECTION = _CHROMA_CLIENT.get_or_create_collection(
-            name=CONFIG.collections.rag,
-            metadata={"description": "Argo Brain web/article/YouTube knowledge"},
+    collection_name = name or CONFIG.collections.rag
+    if collection_name not in _COLLECTION_CACHE:
+        metadata = {"description": f"Argo Brain collection: {collection_name}"}
+        _COLLECTION_CACHE[collection_name] = _CHROMA_CLIENT.get_or_create_collection(
+            name=collection_name,
+            metadata=metadata,
         )
-    return _RAG_COLLECTION
+    return _COLLECTION_CACHE[collection_name]
 
 
 def split_text(text: str, chunk_size: int = 800, overlap: int = 200) -> List[str]:
@@ -72,6 +74,8 @@ def ingest_text(
     source_type: str,
     url: Optional[str] = None,
     extra_meta: Optional[Dict[str, Any]] = None,
+    *,
+    collection_name: Optional[str] = None,
 ) -> None:
     """Chunk text and insert it into the RAG Chroma collection."""
 
@@ -80,7 +84,7 @@ def ingest_text(
         raise ValueError("No usable text found to ingest.")
 
     embeddings = embed_texts(chunks)
-    collection = _get_collection()
+    collection = _get_collection(collection_name)
     timestamp = int(time.time())
     metadatas: List[Dict[str, Any]] = []
     ids: List[str] = []
@@ -120,14 +124,45 @@ def ingest_url(url: str) -> None:
     ingest_text(text=extracted, source_id=url, source_type="web_page", url=url)
 
 
+def ingest_web_result(
+    content: str,
+    *,
+    source_id: str,
+    url: str,
+    query_id: Optional[str] = None,
+    fetched_at: Optional[int] = None,
+    extra_meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Store live web browsing output into the dedicated web cache collection."""
+
+    metadata = {
+        "url": url,
+        "source_type": "live_web",
+        "query_id": query_id,
+        "fetched_at": fetched_at or int(time.time()),
+    }
+    if extra_meta:
+        metadata.update(extra_meta)
+    ingest_text(
+        text=content,
+        source_id=source_id,
+        source_type="live_web",
+        url=url,
+        extra_meta=metadata,
+        collection_name=CONFIG.collections.web_cache,
+    )
+
+
 def retrieve_knowledge(
     query: str,
     top_k: int = 5,
     filters: Optional[Dict[str, Any]] = None,
+    *,
+    collection_name: Optional[str] = None,
 ) -> List[RetrievedChunk]:
     """Retrieve semantically similar chunks for a query."""
 
-    collection = _get_collection()
+    collection = _get_collection(collection_name)
     response = collection.query(query_texts=[query], n_results=top_k, where=filters)
     documents = response.get("documents", [[]])[0]
     metadatas = response.get("metadatas", [[]])[0]

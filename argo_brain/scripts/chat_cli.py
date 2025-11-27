@@ -22,6 +22,7 @@ COMMANDS = {
     ":new": "Start a new session with a fresh memory buffer",
     ":facts": "List stored profile facts",
     ":summary": "Show the current session summary",
+    ":webcache": "Show recent tool/browser runs for this session",
 }
 
 
@@ -36,7 +37,8 @@ def _render_debug_context(response, debug: bool, show_prompt: bool) -> None:
     summary_flag = "yes" if context.session_summary else "no"
     print(
         f"[context] summary={summary_flag}, auto_mem={len(context.autobiographical_chunks)}, "
-        f"rag={len(context.rag_chunks)}, short_term={len(context.short_term_messages)}"
+        f"rag={len(context.rag_chunks)}, web_cache={len(context.web_cache_chunks)}, "
+        f"short_term={len(context.short_term_messages)}"
     )
     if debug and context.session_summary:
         print(f"[summary] {context.session_summary}")
@@ -44,6 +46,14 @@ def _render_debug_context(response, debug: bool, show_prompt: bool) -> None:
         print("[auto] " + " | ".join(chunk.text for chunk in context.autobiographical_chunks))
     if context.rag_chunks:
         print("[rag] " + " | ".join(chunk.metadata.get("source_type", "unknown") for chunk in context.rag_chunks))
+    if context.web_cache_chunks:
+        print(
+            "[web] "
+            + " | ".join(
+                f"{chunk.metadata.get('url', 'n/a')} @ {chunk.metadata.get('fetched_at', 'unknown')}"
+                for chunk in context.web_cache_chunks
+            )
+        )
     if show_prompt and response.prompt_messages:
         print("\n[prompt]\n" + "\n".join(f"{m.role}: {m.content}" for m in response.prompt_messages))
 
@@ -91,6 +101,10 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
                 summary = assistant.memory_manager.get_session_summary(session_id)
                 print(summary or "No summary yet.")
                 continue
+            if cmd == ":webcache":
+                logger.debug("Listing web cache/tool runs", extra={"session_id": session_id})
+                _print_tool_runs(assistant, session_id)
+                continue
             print(f"Unknown command: {user_input}")
             continue
         logger.info(
@@ -134,3 +148,12 @@ def main(argv: list[str]) -> None:
 
 if __name__ == "__main__":
     main(sys.argv[1:])
+def _print_tool_runs(assistant: ArgoAssistant, session_id: str) -> None:
+    runs = assistant.memory_manager.recent_tool_runs(session_id, limit=5)
+    if not runs:
+        print("No tool runs logged for this session yet.")
+        return
+    for run in runs:
+        print(
+            f"[{run.created_at}] {run.tool_name} input={run.input_payload} output_ref={run.output_ref or '-'}"
+        )

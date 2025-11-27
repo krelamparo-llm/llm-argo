@@ -55,6 +55,12 @@ class ArgoAssistant:
                 for chunk in context.autobiographical_chunks
             )
             context_sections.append(f"Autobiographical memory:\n{formatted}")
+        if context.web_cache_chunks:
+            formatted = "\n\n".join(
+                f"[Web {idx+1}] (fetched {chunk.metadata.get('fetched_at', 'unknown')}) {chunk.text}"
+                for idx, chunk in enumerate(context.web_cache_chunks)
+            )
+            context_sections.append(f"Recent web lookups:\n{formatted}")
         if context.rag_chunks:
             formatted = "\n\n".join(
                 f"[RAG {idx+1}] {chunk.text}" for idx, chunk in enumerate(context.rag_chunks)
