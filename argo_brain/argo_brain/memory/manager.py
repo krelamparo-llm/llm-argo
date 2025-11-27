@@ -16,6 +16,7 @@ from ..config import CONFIG
 from ..embeddings import embed_single, embed_texts
 from ..llm_client import ChatMessage, LLMClient
 from ..rag import RetrievedChunk, ingest_web_result, retrieve_knowledge
+from ..tools.base import ToolRequest, ToolResult
 from .db import MemoryDB, MessageRecord, ProfileFact, ToolRunRecord
 from .prompts import (
     MEMORY_WRITER_INSTRUCTIONS,
@@ -43,6 +44,7 @@ class MemoryContext:
     autobiographical_chunks: List[AutobiographicalChunk]
     rag_chunks: List[RetrievedChunk]
     web_cache_chunks: List[RetrievedChunk]
+    tool_results: List[ToolResult]
 
 
 class MemoryManager:
@@ -68,7 +70,12 @@ class MemoryManager:
         self.db.ensure_session(session_id)
 
     # ---- Retrieval -------------------------------------------------------
-    def get_context_for_prompt(self, session_id: str, user_message: str) -> MemoryContext:
+    def get_context_for_prompt(
+        self,
+        session_id: str,
+        user_message: str,
+        tool_results: Optional[List[ToolResult]] = None,
+    ) -> MemoryContext:
         """Return layered context for the assistant prompt."""
 
         mem_cfg = self.config.memory
@@ -93,6 +100,7 @@ class MemoryManager:
                 "auto_chunks": len(auto_chunks),
                 "rag_chunks": len(rag_chunks),
                 "web_cache_chunks": len(web_cache_chunks),
+                "tool_results": len(tool_results or []),
                 "has_summary": bool(summary),
             },
         )
@@ -102,6 +110,7 @@ class MemoryManager:
             autobiographical_chunks=auto_chunks,
             rag_chunks=rag_chunks,
             web_cache_chunks=web_cache_chunks,
+            tool_results=tool_results or [],
         )
 
     def _retrieve_autobiographical(self, query: str, top_k: int) -> List[AutobiographicalChunk]:
@@ -288,3 +297,24 @@ class MemoryManager:
             query_id=query_id,
             extra_meta={**meta, "session_id": session_id},
         )
+
+    def process_tool_result(self, session_id: str, request: ToolRequest, result: ToolResult) -> None:
+        """Persist bookkeeping for a tool result and cache outputs when applicable."""
+
+        payload = json.dumps(
+            {
+                "query": request.query,
+                "metadata": request.metadata,
+            },
+            ensure_ascii=False,
+        )
+        output_ref = result.metadata.get("url") or result.summary[:120]
+        self.log_tool_run(session_id, result.tool_name, payload, output_ref)
+        if result.metadata.get("source_type") == "live_web" and result.content:
+            self.cache_web_result(
+                session_id=session_id,
+                content=result.content,
+                url=result.metadata.get("url", result.summary),
+                query_id=request.metadata.get("query_id"),
+                extra_meta=result.metadata,
+            )

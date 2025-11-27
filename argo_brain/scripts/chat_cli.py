@@ -1,4 +1,4 @@
-"""Interactive CLI for chatting with Argo using layered memory."""
+"""Interactive CLI for chatting with Argo using layered memory and tools."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import sys
 import textwrap
 import uuid
 from pathlib import Path
+from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -15,6 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from argo_brain.assistant.orchestrator import ArgoAssistant
 from argo_brain.logging import setup_logging
+from argo_brain.tools.base import ToolExecutionError, ToolResult
 
 COMMANDS = {
     ":help": "Show this help message",
@@ -23,6 +25,8 @@ COMMANDS = {
     ":facts": "List stored profile facts",
     ":summary": "Show the current session summary",
     ":webcache": "Show recent tool/browser runs for this session",
+    ":tools": "List available tools",
+    ":tool": "Run a tool: :tool <name> <query_or_url>",
 }
 
 
@@ -30,6 +34,46 @@ def _print_help() -> None:
     print("Available commands:")
     for cmd, desc in COMMANDS.items():
         print(f"  {cmd:<8} {desc}")
+
+
+def _print_tools(assistant: ArgoAssistant) -> None:
+    tools = assistant.available_tools()
+    if not tools:
+        print("No tools registered.")
+        return
+    for tool in tools:
+        print(f"- {tool.name}: {tool.description}")
+
+
+def _print_tool_runs(assistant: ArgoAssistant, session_id: str) -> None:
+    runs = assistant.memory_manager.recent_tool_runs(session_id, limit=5)
+    if not runs:
+        print("No tool runs logged for this session yet.")
+        return
+    for run in runs:
+        print(
+            f"[{run.created_at}] {run.tool_name} input={run.input_payload} output_ref={run.output_ref or '-'}"
+        )
+
+
+def _run_tool_command(
+    assistant: ArgoAssistant,
+    session_id: str,
+    user_input: str,
+    pending_tool_results: List[ToolResult],
+) -> None:
+    parts = user_input.split(maxsplit=2)
+    if len(parts) < 3:
+        print("Usage: :tool <name> <query_or_url>")
+        return
+    _, tool_name, tool_query = parts
+    try:
+        result = assistant.run_tool(tool_name, session_id, tool_query)
+    except ToolExecutionError as exc:
+        print(f"Tool error: {exc}")
+        return
+    pending_tool_results.append(result)
+    print(f"[tool:{tool_name}] {result.summary}")
 
 
 def _render_debug_context(response, debug: bool, show_prompt: bool) -> None:
@@ -54,6 +98,8 @@ def _render_debug_context(response, debug: bool, show_prompt: bool) -> None:
                 for chunk in context.web_cache_chunks
             )
         )
+    if context.tool_results:
+        print("[tools] " + " | ".join(result.summary for result in context.tool_results))
     if show_prompt and response.prompt_messages:
         print("\n[prompt]\n" + "\n".join(f"{m.role}: {m.content}" for m in response.prompt_messages))
 
@@ -69,6 +115,7 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
     logger = logging.getLogger("argo_brain.cli")
     assistant = ArgoAssistant()
     session_id = initial_session
+    pending_tool_results: List[ToolResult] = []
     print("Starting Argo chat. Type :help for commands.")
     while True:
         try:
@@ -89,6 +136,7 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
                 continue
             if cmd == ":new":
                 session_id = uuid.uuid4().hex[:8]
+                pending_tool_results.clear()
                 logger.info("Starting new session %s", session_id)
                 print(f"New session: {session_id}")
                 continue
@@ -105,6 +153,14 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
                 logger.debug("Listing web cache/tool runs", extra={"session_id": session_id})
                 _print_tool_runs(assistant, session_id)
                 continue
+            if cmd == ":tools":
+                logger.debug("Listing tools", extra={"session_id": session_id})
+                _print_tools(assistant)
+                continue
+            if cmd.startswith(":tool"):
+                logger.debug("Running tool command", extra={"session_id": session_id})
+                _run_tool_command(assistant, session_id, user_input, pending_tool_results)
+                continue
             print(f"Unknown command: {user_input}")
             continue
         logger.info(
@@ -114,8 +170,10 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
         response = assistant.send_message(
             session_id,
             user_input,
+            tool_results=pending_tool_results or None,
             return_prompt=show_prompt or debug,
         )
+        pending_tool_results = []
         logger.info(
             "Assistant replied",
             extra={"session_id": session_id, "chars": len(response.text)},
@@ -148,12 +206,3 @@ def main(argv: list[str]) -> None:
 
 if __name__ == "__main__":
     main(sys.argv[1:])
-def _print_tool_runs(assistant: ArgoAssistant, session_id: str) -> None:
-    runs = assistant.memory_manager.recent_tool_runs(session_id, limit=5)
-    if not runs:
-        print("No tool runs logged for this session yet.")
-        return
-    for run in runs:
-        print(
-            f"[{run.created_at}] {run.tool_name} input={run.input_payload} output_ref={run.output_ref or '-'}"
-        )

@@ -82,14 +82,16 @@ python3 scripts/chat_cli.py --session mysession123
 
 Inside the REPL you can type natural language or one of the helper commands:
 
-| Command    | Description                                          |
-|------------|------------------------------------------------------|
-| `:new`     | Start a brand-new session (fresh short-term buffer)  |
-| `:facts`   | List stored profile facts from `profile_facts`       |
-| `:summary` | Show the rolling session summary                     |
-| `:webcache`| Show the latest logged tool/browse runs              |
-| `:help`    | Show help                                            |
-| `:quit`    | Exit the REPL                                        |
+| Command     | Description                                           |
+|-------------|-------------------------------------------------------|
+| `:new`      | Start a brand-new session (fresh short-term buffer)   |
+| `:facts`    | List stored profile facts from `profile_facts`        |
+| `:summary`  | Show the rolling session summary                      |
+| `:webcache` | Show the latest logged tool/browse runs               |
+| `:tools`    | List available tools (e.g., web access)               |
+| `:tool`     | Run a tool: `:tool <name> <query_or_url>`             |
+| `:help`     | Show help                                             |
+| `:quit`     | Exit the REPL                                         |
 
 ### Ingestion & RAG CLIs
 
@@ -129,8 +131,9 @@ Argo Assistant builds prompts by fusing several memory sources:
 2. **Session summary** – Every *N* messages (default 20) Argo asks the LLM to compress older context and stores it in `session_summaries`.
 3. **Autobiographical memory** – A distinct Chroma collection (`argo_autobiographical_memory`) stores long-lived facts extracted by a “memory writer” prompt. Metadata tracks `session_id`, `type`, and `source_type`.
 4. **Profile facts table** – Structured snippets (preferences, ongoing projects, etc.) are stored in SQLite `profile_facts` for quick listing or soft-deactivation.
-5. **Web cache** – Live browsing/tool outputs can be summarized into a dedicated collection (`argo_web_cache`) with provenance metadata (`source_type="live_web"`, `url`, `fetched_at`, `session_id`) so the assistant can re-use recent lookups without polluting autobiographical memory.
-6. **Archival RAG store** – Existing ingestion pipelines populate the `argo_brain_memory` collection with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
+5. **Tool results** – Structured outputs from registered tools (e.g., live web access) are kept as first-class context items so prompts can cite them explicitly before they are persisted anywhere.
+6. **Web cache** – Live browsing/tool outputs can be summarized into a dedicated collection (`argo_web_cache`) with provenance metadata (`source_type="live_web"`, `url`, `fetched_at`, `session_id`) so the assistant can re-use recent lookups without polluting autobiographical memory.
+7. **Archival RAG store** – Existing ingestion pipelines populate the `argo_brain_memory` collection with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
 
 On each turn Argo:
 
@@ -140,6 +143,24 @@ On each turn Argo:
 4. Writes the new messages to SQLite, updates the running summary if due, and runs the memory-writer prompt to persist any durable facts to both SQLite and the autobiographical Chroma collection.
 
 All prompt text lives in `argo_brain/memory/prompts.py` if you want to tweak tone or extraction heuristics.
+
+## Tool system
+
+Argo’s assistant can optionally call external tools before answering. Tools follow a lightweight interface defined in `argo_brain.tools.base` (`Tool`, `ToolRequest`, `ToolResult`) and register with the assistant at startup. The default CLI wires in:
+
+- `WebAccessTool` – fetch a live web page, log the invocation (`tool_runs`), and cache the extracted text in `argo_web_cache`.
+- `MemoryQueryTool` – retrieve relevant personal knowledge base snippets (vector DB).
+- `MemoryWriteTool` – store summarized knowledge back into the personal vector store for future retrieval.
+
+Additional tools can be added by implementing the `Tool` protocol and passing them to `ArgoAssistant`.
+
+When a tool is invoked:
+
+1. The CLI (`:tool <name> <query>`) or future planners create a `ToolRequest`.
+2. The tool returns a `ToolResult`, which is surfaced in the next prompt under “Recent tool outputs”.
+3. `MemoryManager.process_tool_result` logs the run and persists applicable snippets (e.g., live web content) without polluting autobiographical memory.
+
+This keeps tool outputs inspectable (`:webcache`) and separates temporary tool context from the user’s longer-term memory.
 
 ## Data locations & initialization
 

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import List, Optional
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
 
 from ..config import CONFIG
 from ..llm_client import ChatMessage, LLMClient
 from ..memory.manager import MemoryContext, MemoryManager
+from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool
+from ..tools.base import Tool, ToolExecutionError, ToolRegistry, ToolRequest, ToolResult
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are Argo, a personal AI operating entirely on the user's local machine. "
@@ -25,6 +27,7 @@ class AssistantResponse:
     thought: Optional[str] = None
     raw_text: Optional[str] = None
     prompt_messages: Optional[List[ChatMessage]] = None
+    tool_results: List[ToolResult] = field(default_factory=list)
 
 
 class ArgoAssistant:
@@ -36,19 +39,41 @@ class ArgoAssistant:
         llm_client: Optional[LLMClient] = None,
         memory_manager: Optional[MemoryManager] = None,
         system_prompt: Optional[str] = None,
+        tools: Optional[List[Tool]] = None,
+        tool_registry: Optional[ToolRegistry] = None,
     ) -> None:
         self.llm_client = llm_client or LLMClient()
         self.memory_manager = memory_manager or MemoryManager(llm_client=self.llm_client)
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.config = CONFIG
+        self.tool_registry = tool_registry or ToolRegistry()
+        if tools is None:
+            tools = [
+                WebAccessTool(),
+                MemoryQueryTool(),
+                MemoryWriteTool(),
+            ]
+        if tools:
+            for tool in tools:
+                self.tool_registry.register(tool)
 
-    def build_prompt(self, context: MemoryContext, user_message: str) -> List[ChatMessage]:
+    def build_prompt(
+        self,
+        context: MemoryContext,
+        user_message: str,
+    ) -> List[ChatMessage]:
         """Construct chat messages for llama-server."""
 
         messages: List[ChatMessage] = [ChatMessage(role="system", content=self.system_prompt)]
+        manifest_text = self.tool_registry.manifest()
+        if manifest_text and "No external tools" not in manifest_text:
+            messages.append(ChatMessage(role="system", content=manifest_text))
         context_sections: List[str] = []
         if context.session_summary:
             context_sections.append(f"Session summary:\n{context.session_summary}")
+        if context.tool_results:
+            formatted = "\n\n".join(result.to_prompt_block() for result in context.tool_results)
+            context_sections.append(f"Recent tool outputs:\n{formatted}")
         if context.autobiographical_chunks:
             formatted = "\n\n".join(
                 f"- {chunk.text} (type: {chunk.metadata.get('type', 'fact')})"
@@ -95,12 +120,17 @@ class ArgoAssistant:
         session_id: str,
         user_message: str,
         *,
+        tool_results: Optional[List[ToolResult]] = None,
         return_prompt: bool = False,
     ) -> AssistantResponse:
         """Process a new user message and return the assistant output."""
 
         self.memory_manager.ensure_session(session_id)
-        context = self.memory_manager.get_context_for_prompt(session_id, user_message)
+        context = self.memory_manager.get_context_for_prompt(
+            session_id,
+            user_message,
+            tool_results=tool_results,
+        )
         prompt_messages = self.build_prompt(context, user_message)
         response_text = self.llm_client.chat(prompt_messages)
         thought, final_text = self._split_think(response_text)
@@ -112,6 +142,7 @@ class ArgoAssistant:
             thought=thought,
             raw_text=response_text,
             prompt_messages=prompt_messages if return_prompt else None,
+            tool_results=tool_results or [],
         )
 
     def list_profile_facts(self) -> str:
@@ -122,3 +153,25 @@ class ArgoAssistant:
             return "No profile facts stored yet."
         formatted = [f"[{fact.id}] {fact.fact_text} (added {fact.created_at})" for fact in facts]
         return "\n".join(formatted)
+
+    # ---- Tool helpers ---------------------------------------------------
+    def available_tools(self) -> List[Tool]:
+        return self.tool_registry.list_tools()
+
+    def run_tool(
+        self,
+        tool_name: str,
+        session_id: str,
+        query: str,
+        metadata: Optional[Dict[str, str]] = None,
+    ) -> ToolResult:
+        """Execute a registered tool and persist its output."""
+
+        try:
+            tool = self.tool_registry.get(tool_name)
+        except KeyError as exc:
+            raise ToolExecutionError(str(exc)) from exc
+        request = ToolRequest(session_id=session_id, query=query, metadata=metadata or {})
+        result = tool.run(request)
+        self.memory_manager.process_tool_result(session_id, request, result)
+        return result

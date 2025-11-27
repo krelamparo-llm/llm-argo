@@ -1,0 +1,67 @@
+"""Web access tool implementation."""
+
+from __future__ import annotations
+
+import time
+from typing import Dict, Optional
+
+import requests
+import trafilatura
+
+from .base import Tool, ToolExecutionError, ToolRequest, ToolResult
+
+
+class WebAccessTool:
+    """Fetches a web page and returns extracted text for downstream use."""
+
+    name = "web_access"
+    description = "Fetch a URL via HTTP(S) and extract readable text."
+    input_schema = {
+        "type": "object",
+        "properties": {
+            "url": {"type": "string", "description": "HTTP(S) URL to fetch"},
+            "summary": {"type": "string", "description": "Optional summary to log with the result"},
+        },
+        "required": ["url"],
+    }
+    output_schema = {
+        "type": "object",
+        "properties": {
+            "content": {"type": "string", "description": "Extracted plain text"},
+            "metadata": {"type": "object", "description": "Details such as URL and timestamp"},
+        },
+    }
+    side_effects = "external_network"
+
+    def __init__(self, *, timeout: int = 20, user_agent: Optional[str] = None) -> None:
+        self.timeout = timeout
+        self.user_agent = user_agent or "ArgoWebTool/1.0 (+https://argo.local)"
+
+    def run(self, request: ToolRequest) -> ToolResult:
+        url = request.metadata.get("url") or request.query
+        if not url or not url.startswith(("http://", "https://")):
+            raise ToolExecutionError("WebAccessTool requires an http(s) URL in the query or metadata['url']")
+
+        try:
+            response = requests.get(url, timeout=self.timeout, headers={"User-Agent": self.user_agent})
+            response.raise_for_status()
+        except requests.RequestException as exc:  # noqa: PERF203 - capturing all network errors
+            raise ToolExecutionError(f"Failed to fetch {url}: {exc}") from exc
+
+        extracted = trafilatura.extract(response.text, include_comments=False, include_tables=False)
+        content = extracted or response.text[:4000]
+        summary = request.metadata.get("summary") or f"Retrieved {url}"
+        metadata: Dict[str, str] = {
+            "url": url,
+            "fetched_at": str(int(time.time())),
+            "session_id": request.session_id,
+            "source_type": "live_web",
+        }
+        snippets = [content[:500]] if content else []
+        return ToolResult(
+            tool_name=self.name,
+            summary=summary,
+            content=content,
+            metadata=metadata,
+            snippets=snippets,
+        )
