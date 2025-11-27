@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 import textwrap
 import uuid
@@ -13,6 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from argo_brain.assistant.orchestrator import ArgoAssistant
+from argo_brain.logging import setup_logging
 
 COMMANDS = {
     ":help": "Show this help message",
@@ -53,6 +55,8 @@ def _render_answer(response, debug: bool) -> None:
 
 
 def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = False) -> None:
+    setup_logging()
+    logger = logging.getLogger("argo_brain.cli")
     assistant = ArgoAssistant()
     session_id = initial_session
     print("Starting Argo chat. Type :help for commands.")
@@ -67,27 +71,40 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
         if user_input.startswith(":"):
             cmd = user_input.lower()
             if cmd in (":quit", ":q"):
+                logger.info("Session %s exiting chat loop", session_id)
                 break
             if cmd == ":help":
+                logger.debug("Help requested", extra={"session_id": session_id})
                 _print_help()
                 continue
             if cmd == ":new":
                 session_id = uuid.uuid4().hex[:8]
+                logger.info("Starting new session %s", session_id)
                 print(f"New session: {session_id}")
                 continue
             if cmd == ":facts":
+                logger.debug("Listing profile facts", extra={"session_id": session_id})
                 print(assistant.list_profile_facts())
                 continue
             if cmd == ":summary":
+                logger.debug("Showing session summary", extra={"session_id": session_id})
                 summary = assistant.memory_manager.get_session_summary(session_id)
                 print(summary or "No summary yet.")
                 continue
             print(f"Unknown command: {user_input}")
             continue
+        logger.info(
+            "Processing user message",
+            extra={"session_id": session_id, "chars": len(user_input)},
+        )
         response = assistant.send_message(
             session_id,
             user_input,
             return_prompt=show_prompt or debug,
+        )
+        logger.info(
+            "Assistant replied",
+            extra={"session_id": session_id, "chars": len(response.text)},
         )
         _render_answer(response, debug)
         _render_debug_context(response, debug=debug, show_prompt=show_prompt)

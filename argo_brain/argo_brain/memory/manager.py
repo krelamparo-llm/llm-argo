@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -53,6 +55,7 @@ class MemoryManager:
         self.db = db or MemoryDB()
         self.llm_client = llm_client or LLMClient()
         self.config = CONFIG
+        self.logger = logging.getLogger("argo_brain.memory")
         self._chroma_client = PersistentClient(path=str(self.config.paths.vector_db_path))
         self._autobio_collection = self._chroma_client.get_or_create_collection(
             name=self.config.collections.autobiographical,
@@ -72,6 +75,16 @@ class MemoryManager:
         summary = self.db.get_session_summary(session_id)
         auto_chunks = self._retrieve_autobiographical(user_message, mem_cfg.autobiographical_k)
         rag_chunks = retrieve_knowledge(user_message, top_k=mem_cfg.rag_k)
+        self.logger.info(
+            "Prepared context",
+            extra={
+                "session_id": session_id,
+                "short_term": len(short_term),
+                "auto_chunks": len(auto_chunks),
+                "rag_chunks": len(rag_chunks),
+                "has_summary": bool(summary),
+            },
+        )
         return MemoryContext(
             short_term_messages=short_term,
             session_summary=summary,
@@ -119,10 +132,16 @@ class MemoryManager:
     ) -> None:
         """Persist the latest turn and trigger summary + memory updates."""
 
+        start = time.perf_counter()
         self.db.add_message(session_id, "user", user_message)
         self.db.add_message(session_id, "assistant", assistant_response)
         summary = self._maybe_update_summary(session_id)
         self._run_memory_writer(session_id, user_message, assistant_response, summary)
+        elapsed = time.perf_counter() - start
+        self.logger.info(
+            "Recorded interaction",
+            extra={"session_id": session_id, "elapsed_ms": round(elapsed * 1000, 2)},
+        )
 
     # ---- Summaries -------------------------------------------------------
     def _maybe_update_summary(self, session_id: str) -> Optional[str]:
@@ -146,6 +165,7 @@ class MemoryManager:
         ]
         summary = self.llm_client.chat(messages, temperature=0.1, max_tokens=256)
         self.db.upsert_session_summary(session_id, summary)
+        self.logger.debug("Session summary updated", extra={"session_id": session_id})
         return summary
 
     # ---- Memory writer ---------------------------------------------------
@@ -172,6 +192,7 @@ class MemoryManager:
         try:
             data = json.loads(raw_response)
         except json.JSONDecodeError:
+            self.logger.warning("Memory writer returned non-JSON response")
             return
         memories = data.get("memories", [])
         if not isinstance(memories, list) or not memories:
@@ -198,6 +219,10 @@ class MemoryManager:
             )
         if texts:
             self._store_autobiographical_memories(texts, metadatas)
+            self.logger.info(
+                "Stored autobiographical memories",
+                extra={"session_id": session_id, "items": len(texts)},
+            )
 
     def _store_autobiographical_memories(self, texts: List[str], metadatas: List[Dict[str, str]]) -> None:
         embeddings = embed_texts(texts)

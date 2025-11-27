@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
+import logging
 import requests
 
 from .config import CONFIG, LLMConfig
@@ -25,6 +27,7 @@ class LLMClient:
     def __init__(self, config: Optional[LLMConfig] = None, headers: Optional[Dict[str, str]] = None) -> None:
         self.config = config or CONFIG.llm
         self.session = requests.Session()
+        self.logger = logging.getLogger("argo_brain.llm_client")
         default_headers = {
             "Content-Type": "application/json",
             "Authorization": "Bearer local-token",
@@ -52,11 +55,21 @@ class LLMClient:
         if extra_payload:
             payload.update(extra_payload)
 
+        start = time.perf_counter()
         response = self.session.post(
             self.config.base_url,
             data=json.dumps(payload),
             headers=self.headers,
             timeout=self.config.request_timeout,
+        )
+        elapsed = time.perf_counter() - start
+        self.logger.info(
+            "LLM request completed",
+            extra={
+                "status_code": response.status_code,
+                "elapsed_ms": round(elapsed * 1000, 2),
+                "tokens_max": payload.get("max_tokens"),
+            },
         )
         if response.status_code != 200:
             raise RuntimeError(
