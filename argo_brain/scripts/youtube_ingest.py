@@ -20,11 +20,15 @@ from youtube_transcript_api import (
     YouTubeTranscriptApi,
 )
 
-from argo_brain.rag import ingest_text
+from argo_brain.core.memory.document import SourceDocument
+from argo_brain.core.memory.ingestion import IngestionManager
+from argo_brain.core.memory.session import SessionMode
 
 YOUTUBE_ID_PATTERN = re.compile(
     r"(?:v=|youtu\.be/|youtube\.com/shorts/)([A-Za-z0-9_-]{11})"
 )
+
+INGESTION_MANAGER = IngestionManager()
 
 
 def extract_video_id(url: str) -> Optional[str]:
@@ -80,15 +84,21 @@ def ingest_youtube_url(url: str) -> None:
     if not video_id:
         raise ValueError(f"Could not find a video ID in URL: {url}")
     transcript = fetch_transcript_text(video_id)
-    ingest_text(
-        text=transcript,
-        source_id=f"youtube:{video_id}",
+    doc = SourceDocument(
+        id=f"youtube:{video_id}",
         source_type="youtube_transcript",
+        raw_text=transcript,
+        cleaned_text=transcript,
         url=url,
-        extra_meta={
+        metadata={
             "video_id": video_id,
             "fetched_ts": int(time.time()),
         },
+    )
+    INGESTION_MANAGER.ingest_document(
+        doc,
+        session_mode=SessionMode.INGEST,
+        user_intent="explicit_save",
     )
 
 

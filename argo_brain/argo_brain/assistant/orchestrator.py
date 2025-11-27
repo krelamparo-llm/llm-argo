@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 from ..llm_client import ChatMessage, LLMClient
+from ..core.memory.session import SessionMode
 from ..memory.manager import MemoryContext, MemoryManager
 from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool
 from ..tools.base import Tool, ToolExecutionError, ToolRegistry, ToolRequest, ToolResult
@@ -47,12 +48,14 @@ class ArgoAssistant:
         system_prompt: Optional[str] = None,
         tools: Optional[List[Tool]] = None,
         tool_registry: Optional[ToolRegistry] = None,
+        default_session_mode: SessionMode = SessionMode.QUICK_LOOKUP,
     ) -> None:
         self.llm_client = llm_client or LLMClient()
         self.memory_manager = memory_manager or MemoryManager(llm_client=self.llm_client)
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.config = CONFIG
         self.tool_registry = tool_registry or ToolRegistry()
+        self.default_session_mode = default_session_mode
         if tools is None:
             tools = [
                 WebAccessTool(),
@@ -157,9 +160,11 @@ class ArgoAssistant:
         *,
         tool_results: Optional[List[ToolResult]] = None,
         return_prompt: bool = False,
+        session_mode: Optional[SessionMode] = None,
     ) -> AssistantResponse:
         """Process a new user message and return the assistant output."""
 
+        active_mode = session_mode or self.default_session_mode
         self.memory_manager.ensure_session(session_id)
         tool_results_accum = list(tool_results or [])
         context = self.memory_manager.get_context_for_prompt(
@@ -186,7 +191,13 @@ class ArgoAssistant:
                     else arguments.get("url")
                 )
                 query_value = query_arg or user_message
-                result = self.run_tool(tool_name, session_id, str(query_value), metadata=arguments)
+                result = self.run_tool(
+                    tool_name,
+                    session_id,
+                    str(query_value),
+                    metadata=arguments,
+                    session_mode=active_mode,
+                )
                 tool_results_accum.append(result)
                 context = self.memory_manager.get_context_for_prompt(
                     session_id,
@@ -235,6 +246,7 @@ class ArgoAssistant:
         session_id: str,
         query: str,
         metadata: Optional[Dict[str, Any]] = None,
+        session_mode: SessionMode = SessionMode.QUICK_LOOKUP,
     ) -> ToolResult:
         """Execute a registered tool and persist its output."""
 
@@ -242,7 +254,12 @@ class ArgoAssistant:
             tool = self.tool_registry.get(tool_name)
         except KeyError as exc:
             raise ToolExecutionError(str(exc)) from exc
-        request = ToolRequest(session_id=session_id, query=query, metadata=metadata or {})
+        request = ToolRequest(
+            session_id=session_id,
+            query=query,
+            metadata=metadata or {},
+            session_mode=session_mode,
+        )
         result = tool.run(request)
         self.memory_manager.process_tool_result(session_id, request, result)
         return result

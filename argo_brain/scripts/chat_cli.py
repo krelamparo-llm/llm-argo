@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from argo_brain.assistant.orchestrator import ArgoAssistant
+from argo_brain.core.memory.session import SessionMode
 from argo_brain.logging import setup_logging
 from argo_brain.tools.base import ToolExecutionError, ToolResult
 
@@ -61,6 +62,7 @@ def _run_tool_command(
     session_id: str,
     user_input: str,
     pending_tool_results: List[ToolResult],
+    session_mode: SessionMode,
 ) -> None:
     parts = user_input.split(maxsplit=2)
     if len(parts) < 3:
@@ -68,7 +70,12 @@ def _run_tool_command(
         return
     _, tool_name, tool_query = parts
     try:
-        result = assistant.run_tool(tool_name, session_id, tool_query)
+        result = assistant.run_tool(
+            tool_name,
+            session_id,
+            tool_query,
+            session_mode=session_mode,
+        )
     except ToolExecutionError as exc:
         print(f"Tool error: {exc}")
         return
@@ -110,10 +117,15 @@ def _render_answer(response, debug: bool) -> None:
     print(f"Argo> {response.text}\n")
 
 
-def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = False) -> None:
+def chat_loop(
+    initial_session: str,
+    mode: SessionMode,
+    debug: bool = False,
+    show_prompt: bool = False,
+) -> None:
     setup_logging()
     logger = logging.getLogger("argo_brain.cli")
-    assistant = ArgoAssistant()
+    assistant = ArgoAssistant(default_session_mode=mode)
     session_id = initial_session
     pending_tool_results: List[ToolResult] = []
     print("Starting Argo chat. Type :help for commands.")
@@ -159,7 +171,7 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
                 continue
             if cmd.startswith(":tool"):
                 logger.debug("Running tool command", extra={"session_id": session_id})
-                _run_tool_command(assistant, session_id, user_input, pending_tool_results)
+                _run_tool_command(assistant, session_id, user_input, pending_tool_results, mode)
                 continue
             print(f"Unknown command: {user_input}")
             continue
@@ -172,6 +184,7 @@ def chat_loop(initial_session: str, debug: bool = False, show_prompt: bool = Fal
             user_input,
             tool_results=pending_tool_results or None,
             return_prompt=show_prompt or debug,
+            session_mode=mode,
         )
         pending_tool_results = []
         logger.info(
@@ -199,9 +212,16 @@ def main(argv: list[str]) -> None:
         action="store_true",
         help="Dump the full prompt messages sent to the LLM",
     )
+    parser.add_argument(
+        "--mode",
+        choices=[m.value for m in SessionMode],
+        default=SessionMode.QUICK_LOOKUP.value,
+        help="Session mode guiding ingestion defaults",
+    )
     args = parser.parse_args(argv)
     session_id = args.session or uuid.uuid4().hex[:8]
-    chat_loop(session_id, debug=args.debug, show_prompt=args.show_prompt)
+    mode = SessionMode.from_raw(args.mode)
+    chat_loop(session_id, mode, debug=args.debug, show_prompt=args.show_prompt)
 
 
 if __name__ == "__main__":

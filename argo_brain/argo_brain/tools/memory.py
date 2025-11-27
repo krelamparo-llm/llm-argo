@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from ..config import CONFIG
-from ..rag import ingest_text, retrieve_knowledge
+from ..core.memory.document import SourceDocument
+from ..core.memory.ingestion import (
+    IngestionManager,
+    IngestionPolicy,
+    get_default_ingestion_manager,
+)
+from ..rag import retrieve_knowledge
 from .base import ToolExecutionError, Tool, ToolRequest, ToolResult
 
 
@@ -67,6 +73,10 @@ class MemoryWriteTool:
             "source_type": {"type": "string", "description": "Logical source label", "default": "conversation_note"},
             "source_id": {"type": "string", "description": "Unique identifier for the source"},
             "url": {"type": "string", "description": "Optional URL associated with the note"},
+            "policy": {
+                "type": "string",
+                "description": "Optional ingestion policy override (ephemeral|summary_only|full)",
+            },
         },
         "required": ["text"],
     }
@@ -79,32 +89,43 @@ class MemoryWriteTool:
     }
     side_effects = "writes_memory"
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, ingestion_manager: IngestionManager | None = None) -> None:
+        self.ingestion_manager = ingestion_manager or get_default_ingestion_manager()
 
     def run(self, request: ToolRequest) -> ToolResult:
         text = request.metadata.get("text") or request.query
         if not text:
             raise ToolExecutionError("memory_write requires 'text' in metadata or query")
-        source_type = request.metadata.get("source_type", "conversation_note")
+        source_type = request.metadata.get("source_type", "note")
         source_id = request.metadata.get("source_id") or f"memory:{request.session_id}:{abs(hash(text))}"
         url = request.metadata.get("url")
-        ingest_text(
-            text=text,
-            source_id=source_id,
+        policy_value = request.metadata.get("policy")
+        policy = None
+        if isinstance(policy_value, str):
+            try:
+                policy = IngestionPolicy(policy_value)
+            except ValueError:
+                policy = None
+        doc = SourceDocument(
+            id=source_id,
             source_type=source_type,
+            raw_text=text,
+            cleaned_text=text,
             url=url,
-            extra_meta={
-                "session_id": request.session_id,
-                "source_type": source_type,
-            },
-            collection_name=CONFIG.collections.rag,
+            metadata={"session_id": request.session_id},
+        )
+        intent = "explicit_save"
+        self.ingestion_manager.ingest_document(
+            doc,
+            session_mode=request.session_mode,
+            user_intent=intent,
+            policy_override=policy,
         )
         summary = f"Stored note '{source_id}'"
         return ToolResult(
             tool_name=self.name,
             summary=summary,
             content=text,
-            metadata={"source_id": source_id, "source_type": source_type, "url": url},
+            metadata={"source_id": source_id, "source_type": source_type, "url": url, "ingested": True},
             snippets=[text[:200]],
         )

@@ -9,10 +9,15 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
+import numpy as np
+
 from ..config import CONFIG
+from ..core.memory.document import SourceDocument
+from ..core.memory.ingestion import IngestionManager
+from ..core.memory.session import SessionMode
 from ..embeddings import embed_single, embed_texts
 from ..llm_client import ChatMessage, LLMClient
-from ..rag import RetrievedChunk, ingest_web_result, retrieve_knowledge
+from ..rag import RetrievedChunk, retrieve_knowledge
 from ..tools.base import ToolRequest, ToolResult
 from ..vector_store import get_vector_store
 from .db import MemoryDB, MessageRecord, ProfileFact, ToolRunRecord
@@ -58,6 +63,10 @@ class MemoryManager:
         self.config = CONFIG
         self.logger = logging.getLogger("argo_brain.memory")
         self.vector_store = get_vector_store()
+        self.ingestion_manager = IngestionManager(
+            vector_store=self.vector_store,
+            llm_client=self.llm_client,
+        )
 
     # ---- Session helpers -------------------------------------------------
     def ensure_session(self, session_id: str) -> None:
@@ -119,26 +128,23 @@ class MemoryManager:
     def _retrieve_autobiographical(self, query: str, top_k: int) -> List[AutobiographicalChunk]:
         if not query.strip():
             return []
-        embedding = embed_single(query)
-        if not embedding:
+        embedding_vec = embed_single(query)
+        if not embedding_vec:
             return []
-        response = self.vector_store.query(
-            collection=self.config.collections.autobiographical,
-            query_embeddings=[embedding],
-            n_results=top_k,
+        query_embedding = np.array(embedding_vec, dtype=float)
+        documents = self.vector_store.query(
+            namespace=self.config.collections.autobiographical,
+            query_embedding=query_embedding,
+            k=top_k,
         )
-        docs = response.documents
-        metas = response.metadatas
-        ids = response.ids
-        distances = response.distances
         chunks: List[AutobiographicalChunk] = []
-        for doc, meta, chunk_id, dist in zip(docs, metas, ids, distances):
+        for doc in documents:
             chunks.append(
                 AutobiographicalChunk(
-                    text=doc,
-                    metadata=meta or {},
-                    chunk_id=chunk_id,
-                    distance=dist,
+                    text=doc.text,
+                    metadata=doc.metadata or {},
+                    chunk_id=doc.id,
+                    distance=doc.score,
                 )
             )
         return chunks
@@ -261,13 +267,13 @@ class MemoryManager:
             )
 
     def _store_autobiographical_memories(self, texts: List[str], metadatas: List[Dict[str, str]]) -> None:
-        embeddings = embed_texts(texts)
+        embeddings = np.array(embed_texts(texts), dtype=float)
         ids = [f"auto:{uuid4().hex}" for _ in texts]
         self.vector_store.add(
-            collection=self.config.collections.autobiographical,
+            namespace=self.config.collections.autobiographical,
             ids=ids,
+            texts=texts,
             embeddings=embeddings,
-            documents=texts,
             metadatas=metadatas,
         )
 
@@ -301,6 +307,7 @@ class MemoryManager:
         url: str,
         query_id: Optional[str] = None,
         extra_meta: Optional[Dict[str, Any]] = None,
+        session_mode: SessionMode = SessionMode.QUICK_LOOKUP,
     ) -> None:
         """Store a snippet fetched from the live web into the web cache collection."""
 
@@ -308,13 +315,15 @@ class MemoryManager:
         source_id = meta.get("source_id", url)
         if "fetched_at" not in meta:
             meta["fetched_at"] = int(time.time())
-        ingest_web_result(
-            content,
-            source_id=source_id,
+        doc = SourceDocument(
+            id=str(source_id),
+            source_type=meta.get("source_type", "live_web"),
+            raw_text=content,
+            cleaned_text=content,
             url=url,
-            query_id=query_id,
-            extra_meta={**meta, "session_id": session_id},
+            metadata={**meta, "session_id": session_id, "query_id": query_id},
         )
+        self.ingestion_manager.ingest_document(doc, session_mode=session_mode)
 
     def process_tool_result(self, session_id: str, request: ToolRequest, result: ToolResult) -> None:
         """Persist bookkeeping for a tool result and cache outputs when applicable."""
@@ -328,11 +337,16 @@ class MemoryManager:
         )
         output_ref = result.metadata.get("url") or result.summary[:120]
         self.log_tool_run(session_id, result.tool_name, payload, output_ref)
-        if result.metadata.get("source_type") == "live_web" and result.content:
+        if (
+            result.metadata.get("source_type") == "live_web"
+            and result.content
+            and not result.metadata.get("ingested")
+        ):
             self.cache_web_result(
                 session_id=session_id,
                 content=result.content,
                 url=result.metadata.get("url", result.summary),
                 query_id=request.metadata.get("query_id"),
                 extra_meta=result.metadata,
+                session_mode=request.session_mode,
             )

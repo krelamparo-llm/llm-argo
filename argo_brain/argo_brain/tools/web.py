@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import requests
 import trafilatura
 
+from ..core.memory.document import SourceDocument
+from ..core.memory.ingestion import IngestionManager, get_default_ingestion_manager
 from .base import Tool, ToolExecutionError, ToolRequest, ToolResult
 
 
@@ -33,9 +35,16 @@ class WebAccessTool:
     }
     side_effects = "external_network"
 
-    def __init__(self, *, timeout: int = 20, user_agent: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: int = 20,
+        user_agent: Optional[str] = None,
+        ingestion_manager: Optional[IngestionManager] = None,
+    ) -> None:
         self.timeout = timeout
         self.user_agent = user_agent or "ArgoWebTool/1.0 (+https://argo.local)"
+        self.ingestion_manager = ingestion_manager or get_default_ingestion_manager()
 
     def run(self, request: ToolRequest) -> ToolResult:
         url = request.metadata.get("url") or request.query
@@ -51,13 +60,25 @@ class WebAccessTool:
         extracted = trafilatura.extract(response.text, include_comments=False, include_tables=False)
         content = extracted or response.text[:4000]
         summary = request.metadata.get("summary") or f"Retrieved {url}"
-        metadata: Dict[str, Optional[str]] = {
+        metadata: Dict[str, Any] = {
             "url": url,
             "fetched_at": int(time.time()),
             "session_id": request.session_id,
-            "source_type": "live_web",
+            "source_id": request.metadata.get("source_id", url),
         }
         snippets = [content[:500]] if content else []
+        doc = SourceDocument(
+            id=str(metadata["source_id"]),
+            source_type="web_article",
+            raw_text=response.text,
+            cleaned_text=content,
+            url=url,
+            title=request.metadata.get("title"),
+            metadata=metadata,
+        )
+        self.ingestion_manager.ingest_document(doc, session_mode=request.session_mode)
+        metadata["source_type"] = doc.source_type
+        metadata["ingested"] = True
         return ToolResult(
             tool_name=self.name,
             summary=summary,

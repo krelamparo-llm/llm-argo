@@ -66,6 +66,11 @@ DEFAULT_AUTOBIO_COLLECTION = os.environ.get(
 DEFAULT_WEB_CACHE_COLLECTION = os.environ.get(
     "ARGO_WEB_CACHE_COLLECTION", "argo_web_cache"
 )
+DEFAULT_WEB_ARTICLE_COLLECTION = os.environ.get(
+    "ARGO_WEB_ARTICLE_COLLECTION", "argo_web_articles"
+)
+DEFAULT_YOUTUBE_COLLECTION = os.environ.get("ARGO_YOUTUBE_COLLECTION", "argo_youtube")
+DEFAULT_NOTES_COLLECTION = os.environ.get("ARGO_NOTES_COLLECTION", "argo_notes")
 DEFAULT_EMBED_MODEL = os.environ.get("ARGO_EMBED_MODEL", "BAAI/bge-m3")
 DEFAULT_LLAMA_URL = _get_llm_setting("base_url", "http://127.0.0.1:8080/v1/chat/completions")
 DEFAULT_LLAMA_MODEL = _get_llm_setting("model", "local-llm")
@@ -116,6 +121,9 @@ class Collections:
     rag: str = DEFAULT_RAG_COLLECTION
     autobiographical: str = DEFAULT_AUTOBIO_COLLECTION
     web_cache: str = DEFAULT_WEB_CACHE_COLLECTION
+    web_articles: str = DEFAULT_WEB_ARTICLE_COLLECTION
+    youtube: str = DEFAULT_YOUTUBE_COLLECTION
+    notes: str = DEFAULT_NOTES_COLLECTION
 
 
 @dataclass(frozen=True)

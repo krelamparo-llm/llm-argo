@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
 
+from ..core.memory.session import SessionMode
+
 
 @dataclass
 class ToolRequest:
@@ -13,6 +15,7 @@ class ToolRequest:
     session_id: str
     query: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    session_mode: SessionMode = SessionMode.QUICK_LOOKUP
 
 
 @dataclass

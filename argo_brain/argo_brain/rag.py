@@ -8,13 +8,15 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 from uuid import uuid4
 
+import numpy as np
 import requests
 import trafilatura
 
 from .config import CONFIG
-from .embeddings import embed_texts
+from .embeddings import embed_single, embed_texts
 from .llm_client import ChatMessage, LLMClient
-from .vector_store import QueryResult, get_vector_store
+from .vector_store import get_vector_store
+
 _VECTOR_STORE = get_vector_store()
 
 
@@ -61,7 +63,8 @@ def ingest_text(
     if not chunks:
         raise ValueError("No usable text found to ingest.")
 
-    embeddings = embed_texts(chunks)
+    embeddings_list = embed_texts(chunks)
+    embeddings = np.array(embeddings_list, dtype=float)
     timestamp = int(time.time())
     metadatas: List[Dict[str, Any]] = []
     ids: List[str] = []
@@ -81,10 +84,10 @@ def ingest_text(
 
     target_collection = collection_name or CONFIG.collections.rag
     _VECTOR_STORE.add(
-        collection=target_collection,
+        namespace=target_collection,
         ids=ids,
+        texts=chunks,
         embeddings=embeddings,
-        documents=chunks,
         metadatas=metadatas,
     )
 
@@ -147,25 +150,24 @@ def retrieve_knowledge(
     """Retrieve semantically similar chunks for a query."""
 
     target_collection = collection_name or CONFIG.collections.rag
-    response = _VECTOR_STORE.query(
-        collection=target_collection,
-        query_texts=[query],
-        n_results=top_k,
+    embedding_vec = embed_single(query)
+    if not embedding_vec:
+        return []
+    query_embedding = np.array(embedding_vec, dtype=float)
+    documents = _VECTOR_STORE.query(
+        namespace=target_collection,
+        query_embedding=query_embedding,
+        k=top_k,
         filters=filters,
     )
-    documents = response.documents
-    metadatas = response.metadatas
-    ids = response.ids
-    distances = response.distances
-
     chunks: List[RetrievedChunk] = []
-    for doc, meta, chunk_id, dist in zip(documents, metadatas, ids, distances):
+    for doc in documents:
         chunks.append(
             RetrievedChunk(
-                text=doc,
-                metadata=meta or {},
-                chunk_id=chunk_id,
-                distance=dist,
+                text=doc.text,
+                metadata=doc.metadata or {},
+                chunk_id=doc.id,
+                distance=doc.score,
             )
         )
     return chunks
