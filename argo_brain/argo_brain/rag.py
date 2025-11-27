@@ -6,18 +6,20 @@ import json
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
-from uuid import uuid4
-
 import numpy as np
 import requests
 import trafilatura
 
 from .config import CONFIG
-from .embeddings import embed_single, embed_texts
+from .core.memory.document import SourceDocument
+from .core.memory.ingestion import IngestionPolicy, get_default_ingestion_manager
+from .core.memory.session import SessionMode
+from .embeddings import embed_single
 from .llm_client import ChatMessage, LLMClient
 from .vector_store import get_vector_store
 
 _VECTOR_STORE = get_vector_store()
+_INGESTION_MANAGER = get_default_ingestion_manager()
 
 
 @dataclass
@@ -30,24 +32,6 @@ class RetrievedChunk:
     distance: Optional[float] = None
 
 
-def split_text(text: str, chunk_size: int = 800, overlap: int = 200) -> List[str]:
-    """Split text into overlapping chunks."""
-
-    cleaned = text.strip()
-    if not cleaned:
-        return []
-    chunks: List[str] = []
-    start = 0
-    length = len(cleaned)
-    while start < length:
-        end = min(start + chunk_size, length)
-        chunks.append(cleaned[start:end])
-        if end >= length:
-            break
-        start = max(0, end - overlap)
-    return chunks
-
-
 def ingest_text(
     text: str,
     source_id: str,
@@ -57,38 +41,21 @@ def ingest_text(
     *,
     collection_name: Optional[str] = None,
 ) -> None:
-    """Chunk text and insert it into the RAG Chroma collection."""
+    """Backward-compatible wrapper that routes through the ingestion manager."""
 
-    chunks = split_text(text)
-    if not chunks:
-        raise ValueError("No usable text found to ingest.")
-
-    embeddings_list = embed_texts(chunks)
-    embeddings = np.array(embeddings_list, dtype=float)
-    timestamp = int(time.time())
-    metadatas: List[Dict[str, Any]] = []
-    ids: List[str] = []
-    for idx, chunk in enumerate(chunks):
-        metadata: Dict[str, Any] = {
-            "source_id": source_id,
-            "source_type": source_type,
-            "chunk_index": idx,
-            "ingested_ts": timestamp,
-        }
-        if url:
-            metadata["url"] = url
-        if extra_meta:
-            metadata.update(extra_meta)
-        metadatas.append(metadata)
-        ids.append(f"{source_id}:{timestamp}:{idx}:{uuid4().hex[:8]}")
-
-    target_collection = collection_name or CONFIG.collections.rag
-    _VECTOR_STORE.add(
-        namespace=target_collection,
-        ids=ids,
-        texts=chunks,
-        embeddings=embeddings,
-        metadatas=metadatas,
+    doc = SourceDocument(
+        id=source_id,
+        source_type=source_type,
+        raw_text=text,
+        cleaned_text=text,
+        url=url,
+        metadata=extra_meta or {},
+    )
+    _INGESTION_MANAGER.ingest_document(
+        doc,
+        session_mode=SessionMode.INGEST,
+        user_intent="explicit_save",
+        policy_override=IngestionPolicy.FULL,
     )
 
 
@@ -130,13 +97,18 @@ def ingest_web_result(
     }
     if extra_meta:
         metadata.update(extra_meta)
-    ingest_text(
-        text=content,
-        source_id=source_id,
+    doc = SourceDocument(
+        id=source_id,
         source_type="live_web",
+        raw_text=content,
+        cleaned_text=content,
         url=url,
-        extra_meta=metadata,
-        collection_name=CONFIG.collections.web_cache,
+        metadata=metadata,
+    )
+    _INGESTION_MANAGER.ingest_document(
+        doc,
+        session_mode=SessionMode.QUICK_LOOKUP,
+        policy_override=IngestionPolicy.EPHEMERAL,
     )
 
 

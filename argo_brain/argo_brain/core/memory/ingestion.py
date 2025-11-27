@@ -121,7 +121,7 @@ class IngestionManager:
 
     def _store_summary(self, doc: SourceDocument, summary: str) -> None:
         namespace = self.config.collections.notes
-        embeddings = self._embedder([summary])
+        embeddings = self.embedder([summary])
         if not embeddings:
             return
         vectors = np.array(embeddings, dtype=float)
@@ -145,7 +145,7 @@ class IngestionManager:
     ) -> None:
         if not chunks:
             return
-        embeddings = self._embedder(chunks)
+        embeddings = self.embedder(chunks)
         if not embeddings:
             return
         vectors = np.array(embeddings, dtype=float)
