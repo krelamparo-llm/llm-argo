@@ -93,6 +93,14 @@ class MemoryDB:
                 );
                 CREATE INDEX IF NOT EXISTS idx_tool_runs_session_created
                     ON tool_runs(session_id, created_at DESC);
+
+                CREATE TABLE IF NOT EXISTS session_summary_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    snapshot_text TEXT NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id)
+                );
                 """
             )
 
@@ -240,6 +248,33 @@ class MemoryDB:
                 (session_id, limit),
             ).fetchall()
         return [ToolRunRecord(**dict(row)) for row in rows]
+
+    def add_summary_snapshot(self, session_id: str, snapshot_text: str) -> int:
+        """Persist a snapshot of the rolling session summary."""
+
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO session_summary_snapshots(session_id, snapshot_text)
+                VALUES (?, ?)
+                """,
+                (session_id, snapshot_text),
+            )
+            return int(cursor.lastrowid)
+
+    def list_summary_snapshots(self, session_id: str, limit: int = 5) -> List[SummarySnapshot]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, session_id, snapshot_text, created_at
+                FROM session_summary_snapshots
+                WHERE session_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (session_id, limit),
+            ).fetchall()
+        return [SummarySnapshot(**dict(row)) for row in rows]
 @dataclass
 class ToolRunRecord:
     """Represents a logged tool execution."""
@@ -249,4 +284,13 @@ class ToolRunRecord:
     tool_name: str
     input_payload: str
     output_ref: Optional[str]
+    created_at: str
+
+@dataclass
+class SummarySnapshot:
+    """Historical summary snapshot."""
+
+    id: int
+    session_id: str
+    snapshot_text: str
     created_at: str

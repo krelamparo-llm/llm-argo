@@ -131,9 +131,10 @@ Argo Assistant builds prompts by fusing several memory sources:
 2. **Session summary** – Every *N* messages (default 20) Argo asks the LLM to compress older context and stores it in `session_summaries`.
 3. **Autobiographical memory** – A distinct Chroma collection (`argo_autobiographical_memory`) stores long-lived facts extracted by a “memory writer” prompt. Metadata tracks `session_id`, `type`, and `source_type`.
 4. **Profile facts table** – Structured snippets (preferences, ongoing projects, etc.) are stored in SQLite `profile_facts` for quick listing or soft-deactivation.
-5. **Tool results** – Structured outputs from registered tools (e.g., live web access) are kept as first-class context items so prompts can cite them explicitly before they are persisted anywhere.
-6. **Web cache** – Live browsing/tool outputs can be summarized into a dedicated collection (`argo_web_cache`) with provenance metadata (`source_type="live_web"`, `url`, `fetched_at`, `session_id`) so the assistant can re-use recent lookups without polluting autobiographical memory.
-7. **Archival RAG store** – Existing ingestion pipelines populate the `argo_brain_memory` collection with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
+5. **Session summary snapshots** – In addition to the rolling summary, periodic snapshots are archived in SQLite so long-running sessions keep a hierarchical summary trail.
+6. **Tool results** – Structured outputs from registered tools (e.g., live web access) are kept as first-class context items so prompts can cite them explicitly before they are persisted anywhere.
+7. **Web cache** – Live browsing/tool outputs can be summarized into a dedicated collection (`argo_web_cache`) with provenance metadata (`source_type="live_web"`, `url`, `fetched_at`, `session_id`) so the assistant can re-use recent lookups without polluting autobiographical memory.
+8. **Archival RAG store** – Existing ingestion pipelines populate the `argo_brain_memory` collection with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
 
 On each turn Argo:
 
@@ -146,7 +147,7 @@ All prompt text lives in `argo_brain/memory/prompts.py` if you want to tweak ton
 
 ## Tool system
 
-Argo’s assistant can optionally call external tools before answering. Tools follow a lightweight interface defined in `argo_brain.tools.base` (`Tool`, `ToolRequest`, `ToolResult`) and register with the assistant at startup. The default CLI wires in:
+Argo’s assistant can now automatically call external tools when needed (the LLM emits a JSON tool request when it wants one). Tools follow a lightweight interface defined in `argo_brain.tools.base` (`Tool`, `ToolRequest`, `ToolResult`) and register with the assistant at startup. The default CLI wires in:
 
 - `WebAccessTool` – fetch a live web page, log the invocation (`tool_runs`), and cache the extracted text in `argo_web_cache`.
 - `MemoryQueryTool` – retrieve relevant personal knowledge base snippets (vector DB).
@@ -154,19 +155,19 @@ Argo’s assistant can optionally call external tools before answering. Tools fo
 
 Additional tools can be added by implementing the `Tool` protocol and passing them to `ArgoAssistant`.
 
-When a tool is invoked:
+When a tool is invoked (either automatically or manually via `:tool`):
 
 1. The CLI (`:tool <name> <query>`) or future planners create a `ToolRequest`.
 2. The tool returns a `ToolResult`, which is surfaced in the next prompt under “Recent tool outputs”.
 3. `MemoryManager.process_tool_result` logs the run and persists applicable snippets (e.g., live web content) without polluting autobiographical memory.
 
-This keeps tool outputs inspectable (`:webcache`) and separates temporary tool context from the user’s longer-term memory.
+This keeps tool outputs inspectable (`:webcache`) and separates temporary tool context from the user’s longer-term memory. The LLM will keep asking for tool calls (up to three per turn) until it has enough information to answer.
 
 ## Data locations & initialization
 
 - **Vector DB** – Configured via `argo_brain.config.CONFIG`. Defaults to `/mnt/d/llm/argo_brain/vectordb`. Created automatically by Chroma on first write and houses multiple collections (`argo_brain_memory`, `argo_autobiographical_memory`, `argo_web_cache`).
 - **Autobiographical collection** – Stored alongside the RAG DB under the name `argo_autobiographical_memory`.
-- **SQLite state** – Default path `/mnt/d/llm/argo_brain/state/argo_memory.sqlite3`. The schema is created automatically when `MemoryDB` is instantiated and now includes `tool_runs` for auditing browser/tool invocations in addition to `messages`, `session_summaries`, and `profile_facts`.
+- **SQLite state** – Default path `/mnt/d/llm/argo_brain/state/argo_memory.sqlite3`. The schema is created automatically when `MemoryDB` is instantiated and now includes `tool_runs` (tool audit log) and `session_summary_snapshots` in addition to `messages`, `session_summaries`, and `profile_facts`.
 - **Raw Chrome data** – `/mnt/d/llm/argo_brain/data_raw`. The history ingest script handles copying/locking.
 
 You can customize any of these paths via environment variables (`ARGO_STORAGE_ROOT`, `ARGO_VECTOR_DB_PATH`, `ARGO_SQLITE_PATH`, etc.) before launching the scripts.

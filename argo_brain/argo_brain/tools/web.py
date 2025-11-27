@@ -51,9 +51,9 @@ class WebAccessTool:
         extracted = trafilatura.extract(response.text, include_comments=False, include_tables=False)
         content = extracted or response.text[:4000]
         summary = request.metadata.get("summary") or f"Retrieved {url}"
-        metadata: Dict[str, str] = {
+        metadata: Dict[str, Optional[str]] = {
             "url": url,
-            "fetched_at": str(int(time.time())),
+            "fetched_at": int(time.time()),
             "session_id": request.session_id,
             "source_type": "live_web",
         }

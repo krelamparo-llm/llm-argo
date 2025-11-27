@@ -6,7 +6,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
 from chromadb import PersistentClient
@@ -87,11 +87,7 @@ class MemoryManager:
             top_k=mem_cfg.rag_k,
             collection_name=self.config.collections.rag,
         )
-        web_cache_chunks = retrieve_knowledge(
-            user_message,
-            top_k=max(3, mem_cfg.rag_k // 2),
-            collection_name=self.config.collections.web_cache,
-        )
+        web_cache_chunks = self._retrieve_web_cache(user_message)
         self.logger.info(
             "Prepared context",
             extra={
@@ -110,7 +106,20 @@ class MemoryManager:
             autobiographical_chunks=auto_chunks,
             rag_chunks=rag_chunks,
             web_cache_chunks=web_cache_chunks,
-            tool_results=tool_results or [],
+            tool_results=tool_results if tool_results is not None else [],
+        )
+
+    def _retrieve_web_cache(self, query: str) -> List[RetrievedChunk]:
+        mem_cfg = self.config.memory
+        filters = None
+        if mem_cfg.web_cache_ttl_days > 0:
+            cutoff = int(time.time()) - mem_cfg.web_cache_ttl_days * 86400
+            filters = {"fetched_at": {"$gt": cutoff}}
+        return retrieve_knowledge(
+            query,
+            top_k=max(3, mem_cfg.rag_k // 2),
+            filters=filters,
+            collection_name=self.config.collections.web_cache,
         )
 
     def _retrieve_autobiographical(self, query: str, top_k: int) -> List[AutobiographicalChunk]:
@@ -185,6 +194,17 @@ class MemoryManager:
             ChatMessage(role="user", content=prompt_body),
         ]
         summary = self.llm_client.chat(messages, temperature=0.1, max_tokens=256)
+        snapshot_interval = mem_cfg.summary_snapshot_interval
+        if (
+            existing_summary
+            and snapshot_interval > 0
+            and total_messages % snapshot_interval == 0
+        ):
+            self.db.add_summary_snapshot(session_id, existing_summary)
+            self.logger.debug(
+                "Archived summary snapshot",
+                extra={"session_id": session_id, "messages": total_messages},
+            )
         self.db.upsert_session_summary(session_id, summary)
         self.logger.debug("Session summary updated", extra={"session_id": session_id})
         return summary
@@ -288,8 +308,10 @@ class MemoryManager:
     ) -> None:
         """Store a snippet fetched from the live web into the web cache collection."""
 
-        meta = extra_meta or {}
+        meta = extra_meta.copy() if extra_meta else {}
         source_id = meta.get("source_id", url)
+        if "fetched_at" not in meta:
+            meta["fetched_at"] = int(time.time())
         ingest_web_result(
             content,
             source_id=source_id,

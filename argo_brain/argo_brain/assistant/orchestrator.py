@@ -1,10 +1,11 @@
-"""Assistant orchestration that glues memory, RAG, and llama-server."""
+"""Assistant orchestration that glues memory, RAG, tools, and llama-server."""
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 from ..llm_client import ChatMessage, LLMClient
@@ -13,8 +14,11 @@ from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool
 from ..tools.base import Tool, ToolExecutionError, ToolRegistry, ToolRequest, ToolResult
 
 DEFAULT_SYSTEM_PROMPT = (
-    "You are Argo, a personal AI operating entirely on the user's local machine. "
-    "Leverage the provided context, cite sources when possible, and be concise."
+    "You are Argo, a personal AI running locally for Karl. Leverage the provided context, cite "
+    "sources when possible, and be concise.\n"
+    "You can call external tools when needed. To call a tool, respond ONLY with JSON in the form\n"
+    '{"tool_name": "name", "arguments": {"key": "value"}}. After receiving tool results, continue\n'
+    "reasoning and provide a final natural-language answer when the task is complete."
 )
 
 
@@ -32,6 +36,8 @@ class AssistantResponse:
 
 class ArgoAssistant:
     """High-level assistant that routes through the memory manager."""
+
+    MAX_TOOL_CALLS = 3
 
     def __init__(
         self,
@@ -115,6 +121,35 @@ class ArgoAssistant:
         final_text = final_text.replace("<final>", "").replace("</final>", "").strip()
         return think_text or None, final_text
 
+    def _maybe_parse_tool_call(self, response_text: str) -> Optional[Dict[str, Any]]:
+        """Detect whether the LLM is requesting a tool call via JSON."""
+
+        stripped = response_text.strip()
+        if not stripped.startswith("{"):
+            return None
+        try:
+            data = json.loads(stripped)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        tool_name = data.get("tool_name") or data.get("name")
+        if not tool_name:
+            return None
+        arguments = data.get("arguments") or data.get("args") or {}
+        if not isinstance(arguments, dict):
+            arguments = {}
+        return {"tool_name": str(tool_name), "arguments": arguments}
+
+    def _format_tool_result_for_prompt(self, result: ToolResult) -> str:
+        metadata_preview = json.dumps(result.metadata, ensure_ascii=False)[:800]
+        content_preview = (result.content or "")[:1200]
+        return (
+            f"Tool {result.tool_name} result summary: {result.summary}\n"
+            f"Content:\n{content_preview}\n"
+            f"Metadata: {metadata_preview}"
+        )
+
     def send_message(
         self,
         session_id: str,
@@ -126,13 +161,49 @@ class ArgoAssistant:
         """Process a new user message and return the assistant output."""
 
         self.memory_manager.ensure_session(session_id)
+        tool_results_accum = list(tool_results or [])
         context = self.memory_manager.get_context_for_prompt(
             session_id,
             user_message,
-            tool_results=tool_results,
+            tool_results=tool_results_accum,
         )
-        prompt_messages = self.build_prompt(context, user_message)
-        response_text = self.llm_client.chat(prompt_messages)
+        extra_messages: List[ChatMessage] = []
+        iterations = 0
+        response_text = ""
+        while True:
+            prompt_messages = self.build_prompt(context, user_message) + extra_messages
+            response_text = self.llm_client.chat(prompt_messages)
+            tool_call = self._maybe_parse_tool_call(response_text)
+            if tool_call and iterations < self.MAX_TOOL_CALLS:
+                iterations += 1
+                tool_name = tool_call["tool_name"]
+                arguments = tool_call.get("arguments", {})
+                if not isinstance(arguments, dict):
+                    arguments = {}
+                query_arg = (
+                    str(arguments.get("query"))
+                    if arguments.get("query") is not None
+                    else arguments.get("url")
+                )
+                query_value = query_arg or user_message
+                result = self.run_tool(tool_name, session_id, str(query_value), metadata=arguments)
+                tool_results_accum.append(result)
+                context = self.memory_manager.get_context_for_prompt(
+                    session_id,
+                    user_message,
+                    tool_results=tool_results_accum,
+                )
+                call_json = json.dumps({"tool_name": tool_name, "arguments": arguments}, ensure_ascii=False)
+                extra_messages.append(ChatMessage(role="assistant", content=f"TOOL_CALL {call_json}"))
+                extra_messages.append(
+                    ChatMessage(
+                        role="system",
+                        content=self._format_tool_result_for_prompt(result),
+                    )
+                )
+                continue
+            break
+
         thought, final_text = self._split_think(response_text)
         # Persist the cleaned final text so summaries/memories stay concise.
         self.memory_manager.record_interaction(session_id, user_message, final_text)
@@ -142,7 +213,7 @@ class ArgoAssistant:
             thought=thought,
             raw_text=response_text,
             prompt_messages=prompt_messages if return_prompt else None,
-            tool_results=tool_results or [],
+            tool_results=tool_results_accum,
         )
 
     def list_profile_facts(self) -> str:
@@ -163,7 +234,7 @@ class ArgoAssistant:
         tool_name: str,
         session_id: str,
         query: str,
-        metadata: Optional[Dict[str, str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> ToolResult:
         """Execute a registered tool and persist its output."""
 

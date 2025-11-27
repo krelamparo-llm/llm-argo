@@ -42,8 +42,10 @@ class MemoryConfig:
     short_term_window: int = int(os.environ.get("ARGO_SHORT_TERM_WINDOW", 6))
     summary_interval: int = int(os.environ.get("ARGO_SUMMARY_INTERVAL", 20))
     summary_history_limit: int = int(os.environ.get("ARGO_SUMMARY_HISTORY_LIMIT", 200))
+    summary_snapshot_interval: int = int(os.environ.get("ARGO_SUMMARY_SNAPSHOT_INTERVAL", 80))
     autobiographical_k: int = int(os.environ.get("ARGO_AUTOBIO_K", 5))
     rag_k: int = int(os.environ.get("ARGO_RAG_K", 5))
+    web_cache_ttl_days: int = int(os.environ.get("ARGO_WEB_CACHE_TTL_DAYS", 7))
 
 
 @dataclass(frozen=True)
