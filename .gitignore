@@ -1,0 +1,15 @@
+# visual code workspaces
+llm.code-workspace
+
+# Ignore compiled bytecode files
+*.pyc
+
+# Ignore __pycache__ directories
+__pycache__/
+
+# Ignore common SQLite database files
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-*

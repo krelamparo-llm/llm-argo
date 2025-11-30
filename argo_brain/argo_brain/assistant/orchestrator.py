@@ -13,6 +13,7 @@ from ..core.memory.session import SessionMode
 from ..memory.manager import MemoryContext, MemoryManager
 from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool
 from ..tools.base import Tool, ToolExecutionError, ToolRegistry, ToolRequest, ToolResult
+from ..utils.json_helpers import extract_json_object
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are Argo, a personal AI running locally for Karl. Leverage the provided context, cite "
@@ -127,13 +128,7 @@ class ArgoAssistant:
     def _maybe_parse_tool_call(self, response_text: str) -> Optional[Dict[str, Any]]:
         """Detect whether the LLM is requesting a tool call via JSON."""
 
-        stripped = response_text.strip()
-        if not stripped.startswith("{"):
-            return None
-        try:
-            data = json.loads(stripped)
-        except json.JSONDecodeError:
-            return None
+        data = extract_json_object(response_text)
         if not isinstance(data, dict):
             return None
         tool_name = data.get("tool_name") or data.get("name")

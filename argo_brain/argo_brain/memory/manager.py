@@ -20,6 +20,7 @@ from ..llm_client import ChatMessage, LLMClient
 from ..rag import RetrievedChunk, retrieve_knowledge
 from ..tools.base import ToolRequest, ToolResult
 from ..vector_store import get_vector_store
+from ..utils.json_helpers import extract_json_object
 from .db import MemoryDB, MessageRecord, ProfileFact, ToolRunRecord
 from .prompts import (
     MEMORY_WRITER_INSTRUCTIONS,
@@ -231,10 +232,9 @@ class MemoryManager:
             ChatMessage(role="user", content=prompt_body),
         ]
         raw_response = self.llm_client.chat(messages, temperature=0.1, max_tokens=256)
-        try:
-            data = json.loads(raw_response)
-        except json.JSONDecodeError:
-            self.logger.warning("Memory writer returned non-JSON response")
+        data = extract_json_object(raw_response)
+        if not isinstance(data, dict):
+            self.logger.warning("Memory writer returned non-JSON or invalid JSON object")
             return
         memories = data.get("memories", [])
         if not isinstance(memories, list) or not memories:

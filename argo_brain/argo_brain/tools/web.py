@@ -10,6 +10,7 @@ import trafilatura
 
 from ..core.memory.document import SourceDocument
 from ..core.memory.ingestion import IngestionManager, get_default_ingestion_manager
+from ..core.memory.session import SessionMode
 from .base import Tool, ToolExecutionError, ToolRequest, ToolResult
 
 
@@ -66,17 +67,20 @@ class WebAccessTool:
             "session_id": request.session_id,
             "source_id": request.metadata.get("source_id", url),
         }
+        session_mode = request.session_mode
+        src_type = "live_web" if session_mode == SessionMode.QUICK_LOOKUP else "web_article"
+        metadata["source_type"] = src_type
         snippets = [content[:500]] if content else []
         doc = SourceDocument(
             id=str(metadata["source_id"]),
-            source_type="web_article",
+            source_type=src_type,
             raw_text=response.text,
             cleaned_text=content,
             url=url,
             title=request.metadata.get("title"),
             metadata=metadata,
         )
-        self.ingestion_manager.ingest_document(doc, session_mode=request.session_mode)
+        self.ingestion_manager.ingest_document(doc, session_mode=session_mode)
         metadata["source_type"] = doc.source_type
         metadata["ingested"] = True
         return ToolResult(

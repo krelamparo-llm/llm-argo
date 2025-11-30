@@ -174,9 +174,9 @@ Argo Assistant builds prompts by fusing several memory sources:
 5. **Session summary snapshots** – In addition to the rolling summary, periodic snapshots are archived in SQLite so long-running sessions keep a hierarchical summary trail.
 6. **Tool results** – Structured outputs from registered tools (e.g., live web access) are kept as first-class context items so prompts can cite them explicitly before they are persisted anywhere.
 7. **Web cache** – Live browsing/tool outputs can be summarized into a dedicated collection (`argo_web_cache`) with provenance metadata (`source_type="live_web"`, `url`, `fetched_at`, `session_id`) so the assistant can re-use recent lookups without polluting autobiographical memory.
-8. **Archival RAG store** – Existing ingestion pipelines populate the `argo_brain_memory` collection with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
+8. **Archival RAG store** – Existing ingestion pipelines populate the `CONFIG.collections.rag` namespace (defaults to `argo_web_articles`) with articles/YouTube/history. `argo_brain.rag.retrieve_knowledge()` provides relevant chunks.
 
-Under the hood the vector store is accessed through a small interface defined in `argo_brain.vector_store`. The default backend is Chroma (embedded, local-first), but the adapter keeps each namespace (`autobiographical`, `web_cache`, `argo_brain_memory`, etc.) isolated so you can swap in LanceDB or Qdrant later without rewriting ingestion code.
+Under the hood the vector store is accessed through a small interface defined in `argo_brain.vector_store`. The default backend is Chroma (embedded, local-first), but the adapter keeps each namespace (`autobiographical`, `web_cache`, `argo_web_articles`, etc.) isolated so you can swap in LanceDB or Qdrant later without rewriting ingestion code.
 
 On each turn Argo:
 
@@ -223,7 +223,7 @@ The overrides keep temporary SQLite/vector-store directories inside the workspac
 
 ## Data locations & initialization
 
-- **Vector DB** – Configured via `argo_brain.config.CONFIG`. Defaults to `/mnt/d/llm/argo_brain/vectordb`. Created automatically by Chroma on first write and houses multiple collections (`argo_brain_memory`, `argo_autobiographical_memory`, `argo_web_cache`).
+- **Vector DB** – Configured via `argo_brain.config.CONFIG`. Defaults to `/mnt/d/llm/argo_brain/vectordb`. Created automatically by Chroma on first write and houses multiple collections (`argo_web_articles`, `argo_autobiographical_memory`, `argo_web_cache`).
 - **Autobiographical collection** – Stored alongside the RAG DB under the name `argo_autobiographical_memory`.
 - **SQLite state** – Default path `/mnt/d/llm/argo_brain/state/argo_memory.sqlite3`. The schema is created automatically when `MemoryDB` is instantiated and now includes `tool_runs` (tool audit log) and `session_summary_snapshots` in addition to `messages`, `session_summaries`, and `profile_facts`.
 - **Raw Chrome data** – `/mnt/d/llm/argo_brain/data_raw`. The history ingest script handles copying/locking.

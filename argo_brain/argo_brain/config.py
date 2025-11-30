@@ -59,7 +59,6 @@ SQLITE_PATH = Path(
     os.environ.get("ARGO_SQLITE_PATH", STATE_DIR / "argo_memory.sqlite3")
 )
 
-DEFAULT_RAG_COLLECTION = os.environ.get("ARGO_RAG_COLLECTION", "argo_brain_memory")
 DEFAULT_AUTOBIO_COLLECTION = os.environ.get(
     "ARGO_AUTOBIO_COLLECTION", "argo_autobiographical_memory"
 )
@@ -68,6 +67,10 @@ DEFAULT_WEB_CACHE_COLLECTION = os.environ.get(
 )
 DEFAULT_WEB_ARTICLE_COLLECTION = os.environ.get(
     "ARGO_WEB_ARTICLE_COLLECTION", "argo_web_articles"
+)
+DEFAULT_RAG_COLLECTION = os.environ.get(
+    "ARGO_RAG_COLLECTION",
+    DEFAULT_WEB_ARTICLE_COLLECTION,
 )
 DEFAULT_YOUTUBE_COLLECTION = os.environ.get("ARGO_YOUTUBE_COLLECTION", "argo_youtube")
 DEFAULT_NOTES_COLLECTION = os.environ.get("ARGO_NOTES_COLLECTION", "argo_notes")
