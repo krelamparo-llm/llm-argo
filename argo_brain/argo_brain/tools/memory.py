@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any, Dict, Optional
+
+import numpy as np
+
 from ..config import CONFIG
 from ..core.memory.document import SourceDocument
 from ..core.memory.ingestion import (
@@ -9,7 +13,8 @@ from ..core.memory.ingestion import (
     IngestionPolicy,
     get_default_ingestion_manager,
 )
-from ..rag import retrieve_knowledge
+from ..embeddings import embed_single
+from ..vector_store import get_vector_store
 from .base import ToolExecutionError, Tool, ToolRequest, ToolResult
 
 
@@ -26,6 +31,9 @@ class MemoryQueryTool:
         "properties": {
             "query": {"type": "string", "description": "Natural language query"},
             "top_k": {"type": "integer", "description": "Number of chunks to return", "default": 5},
+            "namespace": {"type": "string", "description": "Optional memory namespace/collection"},
+            "source_type": {"type": "string", "description": "Optional filter on stored metadata"},
+            "filters": {"type": "object", "description": "Additional metadata filters"},
         },
         "required": ["query"],
     }
@@ -38,25 +46,61 @@ class MemoryQueryTool:
     }
     side_effects = "read_memory"
 
-    def __init__(self, top_k: int = 5) -> None:
+    def __init__(
+        self,
+        top_k: int = 5,
+        *,
+        vector_store=None,
+        default_namespace: Optional[str] = None,
+        embed_fn=None,
+    ) -> None:
         self.top_k = top_k
+        self.vector_store = vector_store or get_vector_store()
+        self.default_namespace = default_namespace or CONFIG.collections.rag
+        self.embed_fn = embed_fn or embed_single
 
     def run(self, request: ToolRequest) -> ToolResult:
         query = request.metadata.get("query") or request.query
         if not query:
             raise ToolExecutionError("memory_query requires a 'query' string")
+        embedding = self.embed_fn(query)
+        if not embedding:
+            raise ToolExecutionError("Failed to embed the query text")
+        namespace = request.metadata.get("namespace", self.default_namespace)
         top_k = int(request.metadata.get("top_k", self.top_k))
-        chunks = retrieve_knowledge(query, top_k=top_k)
-        snippets = [chunk.text[:500] for chunk in chunks]
-        metadata = [chunk.metadata for chunk in chunks]
-        summary = f"Retrieved {len(snippets)} snippets for '{query}'."
+        filters = self._build_filters(request.metadata)
+        documents = self.vector_store.query(
+            namespace=namespace,
+            query_embedding=np.array(embedding, dtype=float),
+            k=top_k,
+            filters=filters,
+        )
+        snippets = [doc.text[:500] for doc in documents]
+        metadata = [doc.metadata for doc in documents]
+        summary = f"Retrieved {len(snippets)} snippets for '{query}' from {namespace}."
         return ToolResult(
             tool_name=self.name,
             summary=summary,
             content="\n\n".join(snippets),
-            metadata={"query": query, "top_k": top_k, "results": metadata},
+            metadata={
+                "query": query,
+                "top_k": top_k,
+                "namespace": namespace,
+                "filters": filters or {},
+                "results": metadata,
+            },
             snippets=snippets,
         )
+
+    def _build_filters(self, metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        filters: Dict[str, Any] = {}
+        source_type = metadata.get("source_type")
+        if source_type:
+            filters["source_type"] = source_type
+        extra_filters = metadata.get("filters")
+        if isinstance(extra_filters, dict):
+            filters.update(extra_filters)
+        return filters or None
 
 
 class MemoryWriteTool:

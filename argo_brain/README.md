@@ -100,6 +100,7 @@ Bring up the interactive CLI to create or resume sessions backed by the new memo
 ```bash
 python3 scripts/chat_cli.py            # random session ID
 python3 scripts/chat_cli.py --session mysession123
+python3 scripts/chat_cli.py --mode research --session deepdive1
 ```
 
 Inside the REPL you can type natural language or one of the helper commands:
@@ -114,6 +115,12 @@ Inside the REPL you can type natural language or one of the helper commands:
 | `:tool`     | Run a tool: `:tool <name> <query_or_url>`             |
 | `:help`     | Show help                                             |
 | `:quit`     | Exit the REPL                                         |
+
+`--mode` switches the ingestion policy for the entire session:
+
+- `quick_lookup` – default, caches live web results but stores only tiny summaries.
+- `research` – keeps summaries of most fetched articles plus the regular cache.
+- `ingest` – treats every provided document/URL as archival and stores full chunks + summaries.
 
 ### Ingestion & RAG CLIs
 
@@ -145,6 +152,17 @@ Inside the REPL you can type natural language or one of the helper commands:
   python3 scripts/rag_core.py "What did I read about reinforcement learning yesterday?"
   ```
 
+### Session modes & ingestion policy
+
+A centralized `IngestionManager` now controls how fetched documents become long-term memory:
+
+- Inputs arrive as normalized `SourceDocument` objects from tools/scripts.
+- Policies determine retention: `EPHEMERAL` (web cache only), `SUMMARY_ONLY`, or `FULL`.
+- Policy selection considers the current `SessionMode` (quick lookup, research, ingest), explicit user intent (e.g., manual memory writes), document type, and length.
+- Chunks route into dedicated namespaces (`web_articles`, `youtube`, `notes`, `web_cache`) so retrieval filters stay simple and retention policies can evolve independently.
+
+This layering lets quick fact-finding avoid polluting autobiographical memory while explicitly-ingested research dumps keep both the granular chunks and auto-generated summaries for later recall.
+
 ## Memory architecture
 
 Argo Assistant builds prompts by fusing several memory sources:
@@ -174,7 +192,7 @@ All prompt text lives in `argo_brain/memory/prompts.py` if you want to tweak ton
 Argo’s assistant can now automatically call external tools when needed (the LLM emits a JSON tool request when it wants one). Tools follow a lightweight interface defined in `argo_brain.tools.base` (`Tool`, `ToolRequest`, `ToolResult`) and register with the assistant at startup. The default CLI wires in:
 
 - `WebAccessTool` – fetch a live web page, log the invocation (`tool_runs`), and cache the extracted text in `argo_web_cache`.
-- `MemoryQueryTool` – retrieve relevant personal knowledge base snippets (vector DB).
+- `MemoryQueryTool` – retrieve relevant personal knowledge base snippets via the vector store abstraction. Optional `namespace`, `source_type`, and `filters` inputs scope the search to specific collections.
 - `MemoryWriteTool` – store summarized knowledge back into the personal vector store for future retrieval.
 
 Additional tools can be added by implementing the `Tool` protocol and passing them to `ArgoAssistant`.
@@ -186,6 +204,22 @@ When a tool is invoked (either automatically or manually via `:tool`):
 3. `MemoryManager.process_tool_result` logs the run and persists applicable snippets (e.g., live web content) without polluting autobiographical memory.
 
 This keeps tool outputs inspectable (`:webcache`) and separates temporary tool context from the user’s longer-term memory. The LLM will keep asking for tool calls (up to three per turn) until it has enough information to answer.
+
+## Testing
+
+Unit tests live under `tests/` inside the project root and rely on environment overrides so they never write to `/mnt/d`. Activate your virtualenv and run:
+
+```bash
+cd /home/llm-argo/argo_brain
+source ~/venvs/llm-wsl/bin/activate
+ARGO_ROOT=$PWD/.tmpdata \
+ARGO_STATE_DIR=$PWD/.tmpdata/state \
+ARGO_DATA_RAW_PATH=$PWD/.tmpdata/data_raw \
+ARGO_VECTOR_STORE_PATH=$PWD/.tmpdata/vectordb \
+python3 -m unittest tests.test_ingestion tests.test_memory_query_tool
+```
+
+The overrides keep temporary SQLite/vector-store directories inside the workspace so the tests can run without elevated permissions or a mounted `/mnt/d`.
 
 ## Data locations & initialization
 
