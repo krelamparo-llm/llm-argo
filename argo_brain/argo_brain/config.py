@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Final
+from typing import Any, Dict, Final, Optional
 
 try:  # Python 3.11+
     import tomllib
@@ -174,6 +174,7 @@ class LLMConfig:
     # Model-specific settings
     use_chat_template: bool = bool(int(os.environ.get("ARGO_LLM_USE_CHAT_TEMPLATE", "0")))
     tokenizer_path: Optional[str] = os.environ.get("ARGO_LLM_TOKENIZER_PATH")
+    model_name: Optional[str] = _get_llm_setting("model_name", "")
 
 
 @dataclass(frozen=True)

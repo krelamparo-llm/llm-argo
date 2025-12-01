@@ -13,6 +13,7 @@ path = "/home/krela/llm-argo/.argo_data/vectordb"
 [llm]
 base_url = "http://127.0.0.1:8080/v1/chat/completions"
 model = "local-llm"
+model_name = "qwen3-coder-30b"  # For auto-detection of model-specific parsers and templates
 
 # Best practices from Qwen3-Coder-30B model documentation
 # These parameters optimize for balanced creativity and accuracy
