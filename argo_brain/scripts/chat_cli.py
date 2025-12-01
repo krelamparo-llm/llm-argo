@@ -29,6 +29,7 @@ COMMANDS = {
     ":webcache": "Show recent tool/browser runs for this session",
     ":tools": "List available tools",
     ":tool": "Run a tool: :tool <name> <query_or_url>",
+    ":stats": "Show aggregated session statistics (tool usage, message counts)",
 }
 
 
@@ -56,6 +57,37 @@ def _print_tool_runs(assistant: ArgoAssistant, session_id: str) -> None:
         print(
             f"[{run.created_at}] {run.tool_name} input={run.input_payload} output_ref={run.output_ref or '-'}"
         )
+
+
+def _print_session_stats(assistant: ArgoAssistant, session_id: str) -> None:
+    """Display aggregated statistics for the current session."""
+    # Get all tool runs for this session
+    runs = assistant.tool_tracker.recent_runs(session_id, limit=1000)
+
+    # Get message count
+    msg_count = assistant.session_manager.db.count_messages(session_id)
+
+    # Get session summary status
+    has_summary = assistant.session_manager.get_session_summary(session_id) is not None
+
+    print(f"\nSession {session_id} statistics:")
+    print(f"  Messages: {msg_count}")
+    print(f"  Has summary: {'yes' if has_summary else 'no'}")
+    print(f"  Total tool calls: {len(runs)}")
+
+    if runs:
+        # Aggregate tool usage counts
+        tool_counts = {}
+        for run in runs:
+            tool_counts[run.tool_name] = tool_counts.get(run.tool_name, 0) + 1
+
+        print(f"  Unique tools used: {len(tool_counts)}")
+        print("\n  Tool usage breakdown:")
+        for tool, count in sorted(tool_counts.items(), key=lambda x: -x[1]):
+            print(f"    {tool}: {count} calls")
+    else:
+        print("  No tool calls yet.")
+    print()
 
 
 def _run_tool_command(
@@ -173,6 +205,10 @@ def chat_loop(
             if cmd == ":webcache":
                 logger.debug("Listing web cache/tool runs", extra={"session_id": session_id})
                 _print_tool_runs(assistant, session_id)
+                continue
+            if cmd == ":stats":
+                logger.debug("Showing session stats", extra={"session_id": session_id})
+                _print_session_stats(assistant, session_id)
                 continue
             if cmd == ":tools":
                 logger.debug("Listing tools", extra={"session_id": session_id})

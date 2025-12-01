@@ -145,10 +145,17 @@ class WebSearchTool:
                 )
             return results
         except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)[:200]
             self.logger.error(
                 "DuckDuckGo search failed",
                 exc_info=True,
-                extra={"query": query, "error": str(e)},
+                extra={
+                    "query": query,
+                    "error_type": error_type,
+                    "error_message": error_message,
+                    "tool_name": self.name,
+                },
             )
             raise ToolExecutionError(f"DuckDuckGo search failed: {e}") from e
 
@@ -185,10 +192,17 @@ class WebSearchTool:
                 )
             return results
         except Exception as e:
+            error_type = type(e).__name__
+            error_message = str(e)[:200]
             self.logger.error(
                 "SearXNG search failed",
                 exc_info=True,
-                extra={"query": query, "error": str(e)},
+                extra={
+                    "query": query,
+                    "error_type": error_type,
+                    "error_message": error_message,
+                    "tool_name": self.name,
+                },
             )
             raise ToolExecutionError(f"SearXNG search failed: {e}") from e
 

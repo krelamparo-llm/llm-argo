@@ -30,14 +30,30 @@ class ToolTracker:
         request: ToolRequest,
         result: ToolResult,
     ) -> None:
-        """Persist tool execution to audit log."""
+        """Persist tool execution to audit log with structured metrics."""
         input_payload = request.query
         output_ref = result.summary[:200] if result.summary else None
+
+        # Database logging
         self.db.log_tool_run(
             session_id=session_id,
             tool_name=result.tool_name,
             input_payload=input_payload,
             output_ref=output_ref,
+        )
+
+        # Structured application logging
+        self.logger.info(
+            "Tool execution completed",
+            extra={
+                "tool_name": result.tool_name,
+                "session_id": session_id,
+                "input_length": len(request.query),
+                "output_length": len(result.content) if result.content else 0,
+                "has_snippets": bool(result.snippets),
+                "snippet_count": len(result.snippets) if result.snippets else 0,
+                "metadata_keys": list(result.metadata.keys()) if result.metadata else [],
+            }
         )
 
     def process_result(

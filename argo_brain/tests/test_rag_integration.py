@@ -11,7 +11,6 @@ import numpy as np
 from argo_brain.config import CONFIG
 from argo_brain.core.memory.document import SourceDocument
 from argo_brain.core.memory.ingestion import IngestionManager
-from argo_brain.core.memory.session import SessionMode
 from argo_brain.core.vector_store.base import Document, VectorStore
 from argo_brain.core.vector_store import factory as factory_module
 from argo_brain.security import TrustLevel
@@ -93,11 +92,8 @@ class RagIntegrationTests(unittest.TestCase):
             url="https://example.com/test",
             metadata={},
         )
-        self.ingestion_manager.ingest_document(
-            doc,
-            session_mode=SessionMode.INGEST,
-            user_intent="explicit_save",
-        )
+        # Ingest as non-ephemeral (archival)
+        self.ingestion_manager.ingest_document(doc, ephemeral=False)
         chunks = self.rag_module.retrieve_knowledge(unique_phrase, top_k=3)
         self.assertTrue(chunks, "Expected to retrieve at least one chunk")
         self.assertTrue(

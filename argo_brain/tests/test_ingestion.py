@@ -10,7 +10,6 @@ import numpy as np
 from argo_brain.config import CONFIG
 from argo_brain.core.memory.document import SourceDocument
 from argo_brain.core.memory.ingestion import IngestionManager
-from argo_brain.core.memory.session import SessionMode
 from argo_brain.core.vector_store.base import Document, VectorStore
 
 
@@ -47,11 +46,6 @@ class FakeVectorStore(VectorStore):
         return 0
 
 
-class FakeLLM:
-    def chat(self, messages, temperature: float = 0.2, max_tokens: int = 256) -> str:  # noqa: D401 - simple fake
-        return "synthetic summary"
-
-
 def fake_embedder(texts: List[str]) -> List[List[float]]:
     return [[1.0] * 3 for _ in texts]
 
@@ -61,13 +55,13 @@ class IngestionManagerTests(unittest.TestCase):
         self.store = FakeVectorStore()
         self.manager = IngestionManager(
             vector_store=self.store,
-            llm_client=FakeLLM(),
             embedder=fake_embedder,
             chunk_size=100,
             chunk_overlap=10,
         )
 
     def test_ephemeral_policy_uses_web_cache_namespace(self) -> None:
+        """Test that ephemeral=True routes to web_cache namespace."""
         doc = SourceDocument(
             id="web:123",
             source_type="live_web",
@@ -76,12 +70,13 @@ class IngestionManagerTests(unittest.TestCase):
             url="https://example.com",
             metadata={},
         )
-        self.manager.ingest_document(doc, session_mode=SessionMode.QUICK_LOOKUP)
+        self.manager.ingest_document(doc, ephemeral=True)
         self.assertTrue(self.store.add_calls)
         namespaces = {call["namespace"] for call in self.store.add_calls}
         self.assertIn(CONFIG.collections.web_cache, namespaces)
 
-    def test_full_ingest_mode_writes_chunks_and_summary(self) -> None:
+    def test_archival_ingestion_uses_source_type_namespace(self) -> None:
+        """Test that non-ephemeral ingestion routes to namespace based on source_type."""
         doc = SourceDocument(
             id="doc:456",
             source_type="web_article",
@@ -90,10 +85,12 @@ class IngestionManagerTests(unittest.TestCase):
             url="https://example.com/data",
             metadata={},
         )
-        self.manager.ingest_document(doc, session_mode=SessionMode.INGEST)
+        self.manager.ingest_document(doc, ephemeral=False)
         namespaces = [call["namespace"] for call in self.store.add_calls]
+        # web_article source_type should route to web_articles collection
         self.assertIn(CONFIG.collections.web_articles, namespaces)
-        self.assertIn(CONFIG.collections.notes, namespaces)
+        # Should only write to one namespace (no longer writes summary separately)
+        self.assertEqual(len(set(namespaces)), 1)
 
 
 if __name__ == "__main__":

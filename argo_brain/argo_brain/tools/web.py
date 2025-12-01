@@ -60,6 +60,18 @@ class WebAccessTool:
             response = requests.get(url, timeout=self.timeout, headers={"User-Agent": self.user_agent})
             response.raise_for_status()
         except requests.RequestException as exc:  # noqa: PERF203 - capturing all network errors
+            error_type = type(exc).__name__
+            error_message = str(exc)[:200]
+            self.logger.error(
+                "Web fetch failed",
+                exc_info=True,
+                extra={
+                    "url": url,
+                    "error_type": error_type,
+                    "error_message": error_message,
+                    "tool_name": self.name,
+                },
+            )
             raise ToolExecutionError(f"Failed to fetch {url}: {exc}") from exc
         final_url = self._validate_url(response.url)
 

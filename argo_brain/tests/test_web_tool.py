@@ -14,8 +14,8 @@ class _FakeIngestionManager:
     def __init__(self) -> None:
         self.calls = []
 
-    def ingest_document(self, doc, session_mode):
-        self.calls.append((doc, session_mode))
+    def ingest_document(self, doc, ephemeral=False):
+        self.calls.append((doc, ephemeral))
 
 
 class WebToolTests(unittest.TestCase):
