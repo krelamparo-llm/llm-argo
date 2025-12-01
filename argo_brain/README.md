@@ -111,7 +111,8 @@ Inside the REPL you can type natural language or one of the helper commands:
 | `:facts`    | List stored profile facts from `profile_facts`        |
 | `:summary`  | Show the rolling session summary                      |
 | `:webcache` | Show the latest logged tool/browse runs               |
-| `:tools`    | List available tools (e.g., web access)               |
+| `:stats`    | Show aggregated session statistics (tool usage, message counts) |
+| `:tools`    | List available tools (e.g., web access, search)       |
 | `:tool`     | Run a tool: `:tool <name> <query_or_url>`             |
 | `:help`     | Show help                                             |
 | `:quit`     | Exit the REPL                                         |
@@ -119,7 +120,14 @@ Inside the REPL you can type natural language or one of the helper commands:
 `--mode` switches the assistant's behavior and ingestion policy for the entire session:
 
 - `quick_lookup` – default, caches live web results but stores only tiny summaries and nudges the LLM toward concise answers.
-- `research` – keeps summaries of most fetched articles plus the regular cache, and prompts the LLM to synthesize multiple sources.
+- **`research`** – **Enhanced deep research mode with planning-first architecture:**
+  - Requires explicit research plan before tool execution
+  - Multi-phase framework: Planning → Execution → Synthesis
+  - Self-reflection prompts after each tool call
+  - Real-time stopping conditions checklist
+  - Source quality evaluation and citation requirements
+  - Confidence assessment and knowledge gap identification
+  - See [RESEARCH_MODE.md](RESEARCH_MODE.md) for details
 - `ingest` – treats every provided document/URL as archival, stores full chunks + summaries, and primes the LLM to help with long-form archiving.
 
 ### Ingestion & RAG CLIs
@@ -189,21 +197,34 @@ All prompt text lives in `argo_brain/memory/prompts.py` if you want to tweak ton
 
 ## Tool system
 
-Argo’s assistant can now automatically call external tools when needed (the LLM emits a JSON tool request when it wants one). Tools follow a lightweight interface defined in `argo_brain.tools.base` (`Tool`, `ToolRequest`, `ToolResult`) and register with the assistant at startup. The default CLI wires in:
+Argo's assistant can now automatically call external tools when needed (the LLM emits a JSON tool request when it wants one). Tools follow a lightweight interface defined in `argo_brain.tools.base` (`Tool`, `ToolRequest`, `ToolResult`) and register with the assistant at startup. The default CLI wires in:
 
-- `WebAccessTool` – fetch a live web page, log the invocation (`tool_runs`), and cache the extracted text in `argo_web_cache`.
-- `MemoryQueryTool` – retrieve relevant personal knowledge base snippets via the vector store abstraction. Optional `namespace`, `source_type`, and `filters` inputs scope the search to specific collections.
-- `MemoryWriteTool` – store summarized knowledge back into the personal vector store for future retrieval.
+- **`WebSearchTool`** – search the web using DuckDuckGo (or SearXNG). Returns URLs and text snippets. Tracks search queries for iterative refinement in research mode.
+- **`WebAccessTool`** – fetch a live web page, extract content with trafilatura, log the invocation (`tool_runs`), and cache the extracted text in `argo_web_cache`. Enforces URL scheme restrictions and host allow-lists for security.
+- **`MemoryQueryTool`** – retrieve relevant personal knowledge base snippets via the vector store abstraction. Optional `namespace`, `source_type`, and `filters` inputs scope the search to specific collections.
+- **`MemoryWriteTool`** – store summarized knowledge back into the personal vector store for future retrieval. Supports both `ephemeral` (auto-expires) and archival storage.
 
 Additional tools can be added by implementing the `Tool` protocol and passing them to `ArgoAssistant`.
 
+### Tool execution flow
+
 When a tool is invoked (either automatically or manually via `:tool`):
 
-1. The CLI (`:tool <name> <query>`) or future planners create a `ToolRequest`.
-2. The tool returns a `ToolResult`, which is surfaced in the next prompt under “Recent tool outputs”.
-3. `MemoryManager.process_tool_result` logs the run and persists applicable snippets (e.g., live web content) without polluting autobiographical memory.
+1. The CLI (`:tool <name> <query>`) or automatic planner creates a `ToolRequest`.
+2. The tool returns a `ToolResult`, which is surfaced in the next prompt under "Recent tool outputs".
+3. `ToolTracker.process_result()` logs the run to SQLite and application logs with structured metrics.
+4. Web content is automatically cached in the ephemeral `web_cache` namespace.
 
-This keeps tool outputs inspectable (`:webcache`) and separates temporary tool context from the user’s longer-term memory. The LLM will keep asking for tool calls (up to three per turn) until it has enough information to answer.
+### Observability
+
+Tool execution is now fully tracked for debugging and optimization:
+
+- **Database audit log**: All tool invocations logged to SQLite `tool_runs` table
+- **Structured application logging**: JSON-formatted logs with tool_name, session_id, input_length, output_length, snippet_count, metadata_keys
+- **Error classification**: All tool failures logged with error_type and error_message
+- **Session statistics**: Use `:stats` command to see aggregated tool usage breakdown
+
+This keeps tool outputs inspectable (`:webcache`, `:stats`) and separates temporary tool context from the user's longer-term memory. The LLM can make up to 10 tool calls per turn in research mode (3 in quick-lookup mode) until it has enough information to answer.
 
 ## Testing
 

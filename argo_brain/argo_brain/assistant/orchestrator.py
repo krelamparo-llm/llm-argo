@@ -84,6 +84,64 @@ class ArgoAssistant:
             for tool in tools:
                 self.tool_registry.register(tool)
 
+    def _get_mode_description(self, session_mode: SessionMode) -> str:
+        """Return mode-specific instructions with research best practices."""
+        if session_mode == SessionMode.QUICK_LOOKUP:
+            return "You are in QUICK LOOKUP mode: answer concisely using available context."
+
+        if session_mode == SessionMode.INGEST:
+            return "You are in INGEST mode: help archive and summarize supplied material."
+
+        # RESEARCH mode: enhanced with best practices from research
+        return """You are in RESEARCH mode: conduct thorough, methodical multi-step research.
+
+RESEARCH FRAMEWORK (Planning-First Architecture):
+
+PHASE 1: PLANNING
+Before any tool calls, provide in <research_plan>:
+- Research question breakdown: What sub-questions must be answered?
+- Search strategy: What keywords/phrases will find authoritative sources?
+- Success criteria: What specific information would fully answer the question?
+- Expected sources: What types of sources are most relevant (academic, industry, documentation)?
+
+PHASE 2: EXECUTION
+For each search iteration:
+1. <think>Evaluate last results: Did I get what I needed? What's missing?</think>
+2. Execute searches with refined queries based on gaps
+3. Fetch full content from 3+ distinct authoritative sources
+4. <think>Source quality check: Is this authoritative? Recent? Primary or secondary?</think>
+
+PHASE 3: SYNTHESIS
+After gathering sources:
+1. <think>Cross-reference: Do sources agree? Any contradictions?</think>
+2. <think>Coverage check: Have I addressed all sub-questions?</think>
+3. <think>Confidence assessment: High/Medium/Low confidence in findings?</think>
+4. <think>Knowledge gaps: What remains unknown or uncertain?</think>
+
+STOPPING CONDITIONS (All must be met):
+✓ Explicit research plan created
+✓ 3+ distinct, authoritative sources fetched
+✓ All sub-questions from plan addressed
+✓ Sources cross-referenced for consistency
+✓ Confidence level assessed for each claim
+✓ Knowledge gaps explicitly acknowledged
+
+QUALITY STANDARDS:
+- Cite sources with URLs: "According to [Source](URL), ..."
+- Flag contradictions: "Source A claims X, but Source B claims Y"
+- Rate source authority: academic > industry expert > general article
+- Prefer recent sources (2023-2025) for current topics
+- Distinguish facts from opinions
+- State confidence: "High confidence: ...", "Limited evidence suggests: ..."
+
+FORMAT REQUIREMENTS:
+- Start with <research_plan>...</research_plan>
+- Use <think>...</think> for evaluation between tool calls
+- End with <synthesis>...</synthesis> containing final answer with citations
+- Include <confidence>High/Medium/Low</confidence> and <gaps>...</gaps>
+
+Continue researching until ALL stopping conditions are met. Resist premature conclusions."""
+
     def build_prompt(
         self,
         context: MemoryContext,
@@ -96,11 +154,7 @@ class ArgoAssistant:
         manifest_text = self.tool_registry.manifest()
         if manifest_text and "No external tools" not in manifest_text:
             messages.append(ChatMessage(role="system", content=manifest_text))
-        mode_description = {
-            SessionMode.QUICK_LOOKUP: "You are in QUICK LOOKUP mode: answer concisely using available context.",
-            SessionMode.RESEARCH: "You are in RESEARCH mode: explore multiple sources and synthesize findings.",
-            SessionMode.INGEST: "You are in INGEST mode: help archive and summarize supplied material.",
-        }[session_mode]
+        mode_description = self._get_mode_description(session_mode)
         messages.append(ChatMessage(role="system", content=mode_description))
         context_block = self._format_context_block(context)
         if context_block:
@@ -119,23 +173,63 @@ class ArgoAssistant:
         return messages
 
     def _format_context_block(self, context: MemoryContext) -> Optional[str]:
+        """Format context with structured XML tags for clarity."""
         sections: List[str] = []
+
+        # Session summary in XML tags
         if context.session_summary:
             sections.append(
-                "SESSION_SUMMARY (trusted personal)\n" + context.session_summary.strip()
+                "<session_summary trust=\"high\">\n"
+                + context.session_summary.strip()
+                + "\n</session_summary>"
             )
-        auto_section = self._format_chunks("AUTOBIO", context.autobiographical_chunks)
+
+        # Autobiographical memories
+        auto_section = self._format_chunks_xml("autobiographical", context.autobiographical_chunks)
         if auto_section:
             sections.append(auto_section)
-        rag_section = self._format_chunks("KNOWLEDGE", context.rag_chunks)
+
+        # Knowledge base (RAG)
+        rag_section = self._format_chunks_xml("knowledge_base", context.rag_chunks)
         if rag_section:
             sections.append(rag_section)
-        web_section = self._format_chunks("WEB_CACHE", context.web_cache_chunks)
+
+        # Web cache (recent tool results)
+        web_section = self._format_chunks_xml("web_cache", context.web_cache_chunks)
         if web_section:
             sections.append(web_section)
+
         return "\n\n".join(sections) if sections else None
 
+    def _format_chunks_xml(self, section_name: str, chunks: List[Any]) -> Optional[str]:
+        """Format chunks with XML structure for better LLM parsing."""
+        if not chunks:
+            return None
+
+        chunk_items: List[str] = []
+        for idx, chunk in enumerate(chunks, start=1):
+            metadata = getattr(chunk, "metadata", {}) or {}
+            trust = metadata.get("trust_level", "unknown")
+            source_type = metadata.get("source_type", "unknown")
+            url = metadata.get("url", "")
+            text = getattr(chunk, "text", "").strip()
+            if not text:
+                continue
+
+            # Build XML chunk
+            chunk_xml = f'<chunk id="{idx}" trust="{trust}" source_type="{source_type}"'
+            if url:
+                chunk_xml += f' url="{url}"'
+            chunk_xml += ">\n" + text + "\n</chunk>"
+            chunk_items.append(chunk_xml)
+
+        if not chunk_items:
+            return None
+
+        return f"<{section_name}>\n" + "\n\n".join(chunk_items) + f"\n</{section_name}>"
+
     def _format_chunks(self, label: str, chunks: List[Any]) -> Optional[str]:
+        """Legacy format method - kept for backward compatibility."""
         lines: List[str] = []
         for idx, chunk in enumerate(chunks, start=1):
             metadata = getattr(chunk, "metadata", {}) or {}
@@ -149,6 +243,12 @@ class ArgoAssistant:
             lines.append(header)
             lines.append(text)
         return "\n".join(lines) if lines else None
+
+    def _extract_xml_tag(self, text: str, tag: str) -> Optional[str]:
+        """Extract content from XML tags like <research_plan>, <think>, etc."""
+        pattern = f"<{tag}>(.*?)</{tag}>"
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        return match.group(1).strip() if match else None
 
     def _split_think(self, response_text: str) -> tuple[Optional[str], str]:
         """Extract optional <think>...</think> content and return (think, final_text)."""
@@ -206,6 +306,51 @@ class ArgoAssistant:
             f"Metadata: {metadata_preview}"
         )
 
+    def _format_research_progress(self, stats: Dict[str, Any]) -> str:
+        """Provide feedback with reflection prompts to encourage quality research."""
+        sources = len(stats["unique_urls"])
+        calls = stats["tool_calls"]
+        searches = stats.get("searches", 0)
+        has_plan = stats.get("has_plan", False)
+
+        feedback = f"\n\n[RESEARCH_PROGRESS: {sources} sources fetched, {searches} searches, {calls} total tools]"
+
+        # Stopping conditions checklist
+        feedback += "\n\nSTOPPING CONDITIONS CHECKLIST:"
+        feedback += f"\n{'✓' if has_plan else '✗'} Explicit research plan created"
+        feedback += f"\n{'✓' if sources >= 3 else '✗'} 3+ distinct sources ({sources}/3)"
+        feedback += f"\n{'?' if sources >= 3 else '✗'} All sub-questions addressed (self-assess)"
+        feedback += f"\n{'?' if sources >= 3 else '✗'} Sources cross-referenced (self-assess)"
+        feedback += "\n✗ Confidence assessed (not done)" if sources >= 3 else "\n✗ Confidence assessed"
+        feedback += "\n✗ Knowledge gaps identified (not done)" if sources >= 3 else "\n✗ Knowledge gaps identified"
+
+        # Show search query evolution
+        if stats.get("search_queries"):
+            feedback += "\n\nSEARCH QUERIES USED:"
+            for idx, query in enumerate(stats["search_queries"][-3:], 1):  # Last 3
+                feedback += f"\n  {idx}. \"{query}\""
+
+        # Reflection prompts based on stage
+        if not has_plan:
+            feedback += "\n\nNEXT: Create <research_plan> with sub-questions and search strategy BEFORE calling tools"
+        elif sources == 0:
+            feedback += "\n\nNEXT: Execute your search strategy from the plan"
+        elif sources < 3:
+            feedback += f"\n\nREFLECTION PROMPT:"
+            feedback += "\n- Did the last source provide what you needed?"
+            feedback += "\n- What information is still missing?"
+            feedback += f"\n- Need {3 - sources} more authoritative sources"
+            feedback += "\n- Should you refine your search query based on what you've learned?"
+        else:
+            feedback += "\n\nREFLECTION PROMPT (Ready for synthesis):"
+            feedback += "\n- Do your sources agree or contradict each other?"
+            feedback += "\n- Have you addressed all sub-questions from your plan?"
+            feedback += "\n- What is your confidence level (High/Medium/Low) for each finding?"
+            feedback += "\n- What remains unknown or uncertain?"
+            feedback += "\n\nREADY TO SYNTHESIZE: Provide <synthesis> with citations, <confidence>, and <gaps>"
+
+        return feedback
+
     def send_message(
         self,
         session_id: str,
@@ -233,11 +378,32 @@ class ArgoAssistant:
             ChatMessage(role="system", content=self._format_tool_result_for_prompt(result))
             for result in tool_results_accum
         ]
+
+        # Track research progress for RESEARCH mode
+        research_stats = {
+            "sources_fetched": 0,
+            "unique_urls": set(),
+            "tool_calls": 0,
+            "searches": 0,
+            "search_queries": [],
+            "has_plan": False,
+            "plan_text": None,
+        }
+
         iterations = 0
         response_text = ""
         while True:
             prompt_messages = self.build_prompt(context, user_message, active_mode) + extra_messages
             response_text = self.llm_client.chat(prompt_messages)
+
+            # Extract research plan if present (RESEARCH mode)
+            if active_mode == SessionMode.RESEARCH and not research_stats["has_plan"]:
+                plan = self._extract_xml_tag(response_text, "research_plan")
+                if plan:
+                    research_stats["has_plan"] = True
+                    research_stats["plan_text"] = plan
+                    self.logger.info("Research plan created", extra={"session_id": session_id, "plan_length": len(plan)})
+
             plan_payload = self._maybe_parse_plan(response_text)
             if plan_payload:
                 proposals = plan_payload["proposals"]
@@ -272,6 +438,19 @@ class ArgoAssistant:
                         session_mode=active_mode,
                     )
                     tool_results_accum.append(result)
+
+                    # Track research progress
+                    research_stats["tool_calls"] += 1
+                    if proposal.tool == "web_search":
+                        research_stats["searches"] += 1
+                        query = arguments.get("query", query_value)
+                        research_stats["search_queries"].append(str(query))
+                    elif proposal.tool == "web_access" and result.metadata:
+                        url = result.metadata.get("url")
+                        if url:
+                            research_stats["unique_urls"].add(url)
+                            research_stats["sources_fetched"] += 1
+
                     context = self.memory_manager.get_context_for_prompt(
                         session_id,
                         user_message,
@@ -279,12 +458,13 @@ class ArgoAssistant:
                     )
                     call_json = json.dumps({"tool_name": proposal.tool, "arguments": arguments}, ensure_ascii=False)
                     extra_messages.append(ChatMessage(role="assistant", content=f"TOOL_CALL {call_json}"))
-                    extra_messages.append(
-                        ChatMessage(
-                            role="system",
-                            content=self._format_tool_result_for_prompt(result),
-                        )
-                    )
+
+                    # Add tool result with research progress feedback in RESEARCH mode
+                    result_msg = self._format_tool_result_for_prompt(result)
+                    if active_mode == SessionMode.RESEARCH:
+                        result_msg += self._format_research_progress(research_stats)
+
+                    extra_messages.append(ChatMessage(role="system", content=result_msg))
                 if approved:
                     continue
             tool_call = self._maybe_parse_tool_call(response_text)
