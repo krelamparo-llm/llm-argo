@@ -56,12 +56,32 @@ class LLMClient:
             payload.update(extra_payload)
 
         start = time.perf_counter()
-        response = self.session.post(
-            self.config.base_url,
-            data=json.dumps(payload),
-            headers=self.headers,
-            timeout=self.config.request_timeout,
-        )
+        try:
+            response = self.session.post(
+                self.config.base_url,
+                data=json.dumps(payload),
+                headers=self.headers,
+                timeout=self.config.request_timeout,
+            )
+        except requests.exceptions.Timeout as exc:
+            msg = (
+                f"LLM request timed out after {self.config.request_timeout}s "
+                f"(base_url={self.config.base_url}). "
+                "Ensure llama-server is running and loaded, or raise ARGO_LLM_TIMEOUT."
+            )
+            self.logger.error(msg, exc_info=True)
+            raise RuntimeError(msg) from exc
+        except requests.exceptions.ConnectionError as exc:
+            msg = (
+                f"Could not connect to LLM server at {self.config.base_url}. "
+                "Start llama-server or set ARGO_LLM_BASE_URL to the correct endpoint."
+            )
+            self.logger.error(msg, exc_info=True)
+            raise RuntimeError(msg) from exc
+        except requests.exceptions.RequestException as exc:
+            msg = f"LLM request failed for {self.config.base_url}: {exc}"
+            self.logger.error(msg, exc_info=True)
+            raise RuntimeError(msg) from exc
         elapsed = time.perf_counter() - start
         self.logger.info(
             "LLM request completed",

@@ -224,13 +224,19 @@ def chat_loop(
             "Processing user message",
             extra={"session_id": session_id, "chars": len(user_input)},
         )
-        response = assistant.send_message(
-            session_id,
-            user_input,
-            tool_results=pending_tool_results or None,
-            return_prompt=show_prompt or debug,
-            session_mode=mode,
-        )
+        try:
+            response = assistant.send_message(
+                session_id,
+                user_input,
+                tool_results=pending_tool_results or None,
+                return_prompt=show_prompt or debug,
+                session_mode=mode,
+            )
+        except RuntimeError as exc:
+            pending_tool_results = []
+            logger.error("Assistant error", exc_info=True, extra={"session_id": session_id})
+            print(f"Error: {exc}")
+            continue
         pending_tool_results = []
         logger.info(
             "Assistant replied",

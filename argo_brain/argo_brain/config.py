@@ -156,7 +156,7 @@ class LLMConfig:
     model: str = DEFAULT_LLAMA_MODEL
     temperature: float = float(os.environ.get("ARGO_LLM_TEMPERATURE", 0.2))
     max_tokens: int = int(os.environ.get("ARGO_LLM_MAX_TOKENS", 512))
-    request_timeout: int = int(os.environ.get("ARGO_LLM_TIMEOUT", 60))
+    request_timeout: int = int(os.environ.get("ARGO_LLM_TIMEOUT", 180))
 
 
 @dataclass(frozen=True)
