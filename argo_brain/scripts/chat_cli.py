@@ -16,7 +16,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from argo_brain.assistant.orchestrator import ArgoAssistant
 from argo_brain.core.memory.session import SessionMode
-from argo_brain.logging import setup_logging
+from argo_brain.log_setup import setup_logging
 from argo_brain.runtime import create_runtime
 from argo_brain.tools.base import ToolExecutionError, ToolResult
 

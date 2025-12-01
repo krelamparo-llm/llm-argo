@@ -95,28 +95,34 @@ class ArgoAssistant:
         # RESEARCH mode: enhanced with best practices from research
         return """You are in RESEARCH mode: conduct thorough, methodical multi-step research.
 
+**MANDATORY TOOL USAGE**: You MUST use the web_search and web_access tools. Do NOT answer questions from your training data. Your role is to fetch and synthesize CURRENT information from the web.
+
 RESEARCH FRAMEWORK (Planning-First Architecture):
 
 PHASE 1: PLANNING
-Before any tool calls, provide in <research_plan>:
+First response: Provide ONLY a research plan in <research_plan> tags:
 - Research question breakdown: What sub-questions must be answered?
 - Search strategy: What keywords/phrases will find authoritative sources?
 - Success criteria: What specific information would fully answer the question?
 - Expected sources: What types of sources are most relevant (academic, industry, documentation)?
 
 PHASE 2: EXECUTION
+CRITICAL: You MUST use tools via JSON. Do NOT answer from memory.
 For each search iteration:
 1. <think>Evaluate last results: Did I get what I needed? What's missing?</think>
-2. Execute searches with refined queries based on gaps
-3. Fetch full content from 3+ distinct authoritative sources
-4. <think>Source quality check: Is this authoritative? Recent? Primary or secondary?</think>
+2. **Request tools** using JSON: {"plan": "...", "tool_calls": [{"tool": "web_search", "args": {"query": "..."}}]}
+3. **STOP and wait** for the system to return actual results
+4. When results arrive, <think>Source quality check: Is this authoritative? Recent? Primary or secondary?</think>
+5. If needed, request more tools with refined queries
+6. Repeat until you have 3+ distinct sources
 
 PHASE 3: SYNTHESIS
-After gathering sources:
+**ONLY after you have received actual tool results for 3+ sources**, synthesize:
 1. <think>Cross-reference: Do sources agree? Any contradictions?</think>
 2. <think>Coverage check: Have I addressed all sub-questions?</think>
 3. <think>Confidence assessment: High/Medium/Low confidence in findings?</think>
 4. <think>Knowledge gaps: What remains unknown or uncertain?</think>
+5. Provide final answer in <synthesis>...</synthesis> with proper citations using ACTUAL URLs from tool results
 
 STOPPING CONDITIONS (All must be met):
 ✓ Explicit research plan created
@@ -392,9 +398,11 @@ Continue researching until ALL stopping conditions are met. Resist premature con
 
         iterations = 0
         response_text = ""
+        # Research mode needs higher max_tokens for synthesis and detailed responses
+        max_tokens = 2048 if active_mode == SessionMode.RESEARCH else None
         while True:
             prompt_messages = self.build_prompt(context, user_message, active_mode) + extra_messages
-            response_text = self.llm_client.chat(prompt_messages)
+            response_text = self.llm_client.chat(prompt_messages, max_tokens=max_tokens)
 
             # Extract research plan if present (RESEARCH mode)
             if active_mode == SessionMode.RESEARCH and not research_stats["has_plan"]:
