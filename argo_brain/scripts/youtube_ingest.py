@@ -21,14 +21,14 @@ from youtube_transcript_api import (
 )
 
 from argo_brain.core.memory.document import SourceDocument
-from argo_brain.core.memory.ingestion import IngestionManager
 from argo_brain.core.memory.session import SessionMode
+from argo_brain.runtime import create_runtime
 
 YOUTUBE_ID_PATTERN = re.compile(
     r"(?:v=|youtu\.be/|youtube\.com/shorts/)([A-Za-z0-9_-]{11})"
 )
 
-INGESTION_MANAGER = IngestionManager()
+INGESTION_MANAGER = create_runtime().ingestion_manager
 
 
 def extract_video_id(url: str) -> Optional[str]:

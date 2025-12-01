@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
-import numpy as np
+from typing import Any, Dict, Optional, Protocol, TYPE_CHECKING
 
 from ..config import CONFIG
 from ..core.memory.document import SourceDocument
@@ -13,8 +11,22 @@ from ..core.memory.ingestion import (
     IngestionPolicy,
     get_default_ingestion_manager,
 )
-from ..embeddings import embed_single
-from ..vector_store import get_vector_store
+from ..vector_store import Document
+
+if TYPE_CHECKING:  # pragma: no cover - import only for type checking
+    from ..memory.manager import MemoryManager
+
+
+class MemoryQueryProvider(Protocol):
+    def query_memory(
+        self,
+        query: str,
+        *,
+        namespace: Optional[str] = None,
+        top_k: int = 5,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> list[Document]:
+        ...
 from .base import ToolExecutionError, Tool, ToolRequest, ToolResult
 
 
@@ -48,31 +60,26 @@ class MemoryQueryTool:
 
     def __init__(
         self,
+        memory_manager: MemoryQueryProvider,
         top_k: int = 5,
         *,
-        vector_store=None,
         default_namespace: Optional[str] = None,
-        embed_fn=None,
     ) -> None:
+        self.memory_manager = memory_manager
         self.top_k = top_k
-        self.vector_store = vector_store or get_vector_store()
         self.default_namespace = default_namespace or CONFIG.collections.rag
-        self.embed_fn = embed_fn or embed_single
 
     def run(self, request: ToolRequest) -> ToolResult:
         query = request.metadata.get("query") or request.query
         if not query:
             raise ToolExecutionError("memory_query requires a 'query' string")
-        embedding = self.embed_fn(query)
-        if not embedding:
-            raise ToolExecutionError("Failed to embed the query text")
         namespace = request.metadata.get("namespace", self.default_namespace)
         top_k = int(request.metadata.get("top_k", self.top_k))
         filters = self._build_filters(request.metadata)
-        documents = self.vector_store.query(
+        documents = self.memory_manager.query_memory(
+            query,
             namespace=namespace,
-            query_embedding=np.array(embedding, dtype=float),
-            k=top_k,
+            top_k=top_k,
             filters=filters,
         )
         snippets = [doc.text[:500] for doc in documents]

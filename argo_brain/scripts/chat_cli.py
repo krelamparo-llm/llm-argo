@@ -17,6 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from argo_brain.assistant.orchestrator import ArgoAssistant
 from argo_brain.core.memory.session import SessionMode
 from argo_brain.logging import setup_logging
+from argo_brain.runtime import create_runtime
 from argo_brain.tools.base import ToolExecutionError, ToolResult
 
 COMMANDS = {
@@ -125,7 +126,13 @@ def chat_loop(
 ) -> None:
     setup_logging()
     logger = logging.getLogger("argo_brain.cli")
-    assistant = ArgoAssistant(default_session_mode=mode)
+    runtime = create_runtime()
+    assistant = ArgoAssistant(
+        llm_client=runtime.llm_client,
+        memory_manager=runtime.memory_manager,
+        default_session_mode=mode,
+        ingestion_manager=runtime.ingestion_manager,
+    )
     session_id = initial_session
     pending_tool_results: List[ToolResult] = []
     print("Starting Argo chat. Type :help for commands.")

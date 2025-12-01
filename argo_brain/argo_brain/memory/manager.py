@@ -19,7 +19,7 @@ from ..embeddings import embed_single, embed_texts
 from ..llm_client import ChatMessage, LLMClient
 from ..rag import RetrievedChunk, retrieve_knowledge
 from ..tools.base import ToolRequest, ToolResult
-from ..vector_store import get_vector_store
+from ..vector_store import Document, get_vector_store
 from ..utils.json_helpers import extract_json_object
 from .db import MemoryDB, MessageRecord, ProfileFact, ToolRunRecord
 from .prompts import (
@@ -58,13 +58,16 @@ class MemoryManager:
         self,
         db: Optional[MemoryDB] = None,
         llm_client: Optional[LLMClient] = None,
+        *,
+        vector_store=None,
+        ingestion_manager: Optional[IngestionManager] = None,
     ) -> None:
         self.db = db or MemoryDB()
         self.llm_client = llm_client or LLMClient()
         self.config = CONFIG
         self.logger = logging.getLogger("argo_brain.memory")
-        self.vector_store = get_vector_store()
-        self.ingestion_manager = IngestionManager(
+        self.vector_store = vector_store or get_vector_store()
+        self.ingestion_manager = ingestion_manager or IngestionManager(
             vector_store=self.vector_store,
             llm_client=self.llm_client,
         )
@@ -350,3 +353,26 @@ class MemoryManager:
                 extra_meta=result.metadata,
                 session_mode=request.session_mode,
             )
+
+    # ---- External query helpers -------------------------------------------
+    def query_memory(
+        self,
+        query: str,
+        *,
+        namespace: Optional[str] = None,
+        top_k: int = 5,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> List[Document]:
+        """Retrieve chunks from the configured vector store for arbitrary tools."""
+
+        target_namespace = namespace or self.config.collections.rag
+        embedding_vec = embed_single(query)
+        if not embedding_vec:
+            return []
+        query_embedding = np.array(embedding_vec, dtype=float)
+        return self.vector_store.query(
+            namespace=target_namespace,
+            query_embedding=query_embedding,
+            k=top_k,
+            filters=filters,
+        )

@@ -4,29 +4,19 @@ from __future__ import annotations
 
 import unittest
 
-from argo_brain.core.vector_store.base import Document, VectorStore
+from argo_brain.core.vector_store.base import Document
 from argo_brain.tools.base import ToolRequest
 from argo_brain.tools.memory import MemoryQueryTool
 
 
-class FakeVectorStore(VectorStore):
+class FakeMemoryManager:
     def __init__(self, documents: list[Document]) -> None:
         self.documents = documents
-        self.last_query: dict | None = None
+        self.calls: list[dict] = []
 
-    def add(self, namespace, texts, embeddings, metadatas=None, ids=None):
-        raise NotImplementedError
-
-    def query(self, namespace, query_embedding, k=5, filters=None):
-        self.last_query = {
-            "namespace": namespace,
-            "k": k,
-            "filters": filters,
-        }
-        return list(self.documents)
-
-    def delete(self, namespace, ids=None, filters=None):
-        return 0
+    def query_memory(self, query: str, *, namespace: str | None = None, top_k: int = 5, filters=None):
+        self.calls.append({"query": query, "namespace": namespace, "top_k": top_k, "filters": filters})
+        return self.documents[:top_k]
 
 
 class MemoryQueryToolTests(unittest.TestCase):
@@ -35,12 +25,11 @@ class MemoryQueryToolTests(unittest.TestCase):
             Document(id="1", text="Python tooling guide", score=0.05, metadata={"source_type": "web_article"}),
             Document(id="2", text="Research notes", score=0.1, metadata={"source_type": "notes"}),
         ]
-        self.store = FakeVectorStore(documents)
+        self.manager = FakeMemoryManager(documents)
         self.tool = MemoryQueryTool(
-            vector_store=self.store,
+            memory_manager=self.manager,
             top_k=2,
             default_namespace="default_ns",
-            embed_fn=lambda _: [0.1, 0.2, 0.3],
         )
 
     def test_namespace_and_filters_passed_to_vector_store(self) -> None:
@@ -55,17 +44,18 @@ class MemoryQueryToolTests(unittest.TestCase):
         )
         result = self.tool.run(request)
         self.assertIn("custom_ns", result.summary)
-        self.assertIsNotNone(self.store.last_query)
-        self.assertEqual(self.store.last_query["namespace"], "custom_ns")
-        self.assertEqual(self.store.last_query["k"], 2)
-        self.assertEqual(self.store.last_query["filters"]["source_type"], "web_article")
-        self.assertEqual(self.store.last_query["filters"]["session_id"], "sess1")
+        self.assertTrue(self.manager.calls)
+        last_call = self.manager.calls[-1]
+        self.assertEqual(last_call["namespace"], "custom_ns")
+        self.assertEqual(last_call["top_k"], 2)
+        self.assertEqual(last_call["filters"]["source_type"], "web_article")
+        self.assertEqual(last_call["filters"]["session_id"], "sess1")
 
     def test_defaults_use_configured_namespace(self) -> None:
         request = ToolRequest(session_id="sess2", query="notes overview", metadata={})
         result = self.tool.run(request)
         self.assertTrue(result.snippets)
-        self.assertEqual(self.store.last_query["namespace"], "default_ns")
+        self.assertEqual(self.manager.calls[-1]["namespace"], "default_ns")
         self.assertEqual(result.metadata["namespace"], "default_ns")
 
 

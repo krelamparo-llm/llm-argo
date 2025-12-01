@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from ..config import CONFIG
 from ..llm_client import ChatMessage, LLMClient
+from ..core.memory.ingestion import IngestionManager
 from ..core.memory.session import SessionMode
 from ..memory.manager import MemoryContext, MemoryManager
 from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool
@@ -50,18 +51,20 @@ class ArgoAssistant:
         tools: Optional[List[Tool]] = None,
         tool_registry: Optional[ToolRegistry] = None,
         default_session_mode: SessionMode = SessionMode.QUICK_LOOKUP,
+        ingestion_manager: Optional[IngestionManager] = None,
     ) -> None:
         self.llm_client = llm_client or LLMClient()
         self.memory_manager = memory_manager or MemoryManager(llm_client=self.llm_client)
+        self.ingestion_manager = ingestion_manager or getattr(self.memory_manager, "ingestion_manager")
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.config = CONFIG
         self.tool_registry = tool_registry or ToolRegistry()
         self.default_session_mode = default_session_mode
         if tools is None:
             tools = [
-                WebAccessTool(),
-                MemoryQueryTool(),
-                MemoryWriteTool(),
+                WebAccessTool(ingestion_manager=self.ingestion_manager),
+                MemoryQueryTool(memory_manager=self.memory_manager),
+                MemoryWriteTool(ingestion_manager=self.ingestion_manager),
             ]
         if tools:
             for tool in tools:
@@ -71,6 +74,7 @@ class ArgoAssistant:
         self,
         context: MemoryContext,
         user_message: str,
+        session_mode: SessionMode,
     ) -> List[ChatMessage]:
         """Construct chat messages for llama-server."""
 
@@ -78,12 +82,15 @@ class ArgoAssistant:
         manifest_text = self.tool_registry.manifest()
         if manifest_text and "No external tools" not in manifest_text:
             messages.append(ChatMessage(role="system", content=manifest_text))
+        mode_description = {
+            SessionMode.QUICK_LOOKUP: "You are in QUICK LOOKUP mode: answer concisely using available context.",
+            SessionMode.RESEARCH: "You are in RESEARCH mode: explore multiple sources and synthesize findings.",
+            SessionMode.INGEST: "You are in INGEST mode: help archive and summarize supplied material.",
+        }[session_mode]
+        messages.append(ChatMessage(role="system", content=mode_description))
         context_sections: List[str] = []
         if context.session_summary:
             context_sections.append(f"Session summary:\n{context.session_summary}")
-        if context.tool_results:
-            formatted = "\n\n".join(result.to_prompt_block() for result in context.tool_results)
-            context_sections.append(f"Recent tool outputs:\n{formatted}")
         if context.autobiographical_chunks:
             formatted = "\n\n".join(
                 f"- {chunk.text} (type: {chunk.metadata.get('type', 'fact')})"
@@ -167,11 +174,14 @@ class ArgoAssistant:
             user_message,
             tool_results=tool_results_accum,
         )
-        extra_messages: List[ChatMessage] = []
+        extra_messages: List[ChatMessage] = [
+            ChatMessage(role="system", content=self._format_tool_result_for_prompt(result))
+            for result in tool_results_accum
+        ]
         iterations = 0
         response_text = ""
         while True:
-            prompt_messages = self.build_prompt(context, user_message) + extra_messages
+            prompt_messages = self.build_prompt(context, user_message, active_mode) + extra_messages
             response_text = self.llm_client.chat(prompt_messages)
             tool_call = self._maybe_parse_tool_call(response_text)
             if tool_call and iterations < self.MAX_TOOL_CALLS:

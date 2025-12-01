@@ -116,11 +116,11 @@ Inside the REPL you can type natural language or one of the helper commands:
 | `:help`     | Show help                                             |
 | `:quit`     | Exit the REPL                                         |
 
-`--mode` switches the ingestion policy for the entire session:
+`--mode` switches the assistant's behavior and ingestion policy for the entire session:
 
-- `quick_lookup` – default, caches live web results but stores only tiny summaries.
-- `research` – keeps summaries of most fetched articles plus the regular cache.
-- `ingest` – treats every provided document/URL as archival and stores full chunks + summaries.
+- `quick_lookup` – default, caches live web results but stores only tiny summaries and nudges the LLM toward concise answers.
+- `research` – keeps summaries of most fetched articles plus the regular cache, and prompts the LLM to synthesize multiple sources.
+- `ingest` – treats every provided document/URL as archival, stores full chunks + summaries, and primes the LLM to help with long-form archiving.
 
 ### Ingestion & RAG CLIs
 
