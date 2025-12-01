@@ -27,7 +27,30 @@ def setup_logging(level: str | int = "INFO") -> logging.Logger:
     logger = logging.getLogger("argo_brain")
     logger.setLevel(level if isinstance(level, int) else getattr(logging, str(level).upper(), logging.INFO))
 
-    formatter = logging.Formatter(
+    # Custom formatter that includes extra fields like elapsed_ms and tokens_max
+    class ExtraFormatter(logging.Formatter):
+        def format(self, record):
+            # Add extra fields to message if they exist
+            extras = []
+            if hasattr(record, 'elapsed_ms'):
+                extras.append(f"elapsed_ms={record.elapsed_ms}")
+            if hasattr(record, 'tokens_max'):
+                extras.append(f"tokens_max={record.tokens_max}")
+            if hasattr(record, 'status_code'):
+                extras.append(f"status={record.status_code}")
+            if hasattr(record, 'session_id'):
+                extras.append(f"session={record.session_id}")
+            if hasattr(record, 'tool'):
+                extras.append(f"tool={record.tool}")
+            if hasattr(record, 'chars'):
+                extras.append(f"chars={record.chars}")
+
+            if extras:
+                record.msg = f"{record.msg} [{', '.join(extras)}]"
+
+            return super().format(record)
+
+    formatter = ExtraFormatter(
         fmt="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
         datefmt="%Y-%m-%dT%H:%M:%S",
     )
