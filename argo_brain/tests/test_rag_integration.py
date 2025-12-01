@@ -14,6 +14,7 @@ from argo_brain.core.memory.ingestion import IngestionManager
 from argo_brain.core.memory.session import SessionMode
 from argo_brain.core.vector_store.base import Document, VectorStore
 from argo_brain.core.vector_store import factory as factory_module
+from argo_brain.security import TrustLevel
 
 
 class FakeVectorStore(VectorStore):
@@ -102,6 +103,10 @@ class RagIntegrationTests(unittest.TestCase):
         self.assertTrue(
             any(unique_phrase in chunk.text for chunk in chunks),
             "Retrieved chunks should contain the ingested text",
+        )
+        self.assertTrue(
+            all(chunk.metadata.get("trust_level") == TrustLevel.WEB_UNTRUSTED.value for chunk in chunks),
+            "Retrieved chunks should be labeled as web_untrusted",
         )
         self.assertIn(
             CONFIG.collections.rag,

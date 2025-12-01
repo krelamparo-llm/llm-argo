@@ -27,6 +27,7 @@ from .prompts import (
     SESSION_SUMMARY_INSTRUCTIONS,
     format_messages_for_prompt,
 )
+from ..security import TrustLevel
 
 
 @dataclass
@@ -86,25 +87,35 @@ class MemoryManager:
         """Return layered context for the assistant prompt."""
 
         mem_cfg = self.config.memory
+        security_cfg = self.config.security
         short_term = self.db.get_recent_messages(session_id, mem_cfg.short_term_window)
         summary = self.db.get_session_summary(session_id)
         auto_chunks = self._retrieve_autobiographical(user_message, mem_cfg.autobiographical_k)
         rag_chunks = retrieve_knowledge(
             user_message,
             top_k=mem_cfg.rag_k,
-            collection_name=self.config.collections.rag,
+            trust_preference=(
+                TrustLevel.PERSONAL_HIGH,
+                TrustLevel.WEB_UNTRUSTED,
+                TrustLevel.TOOL_OUTPUT,
+            ),
+            max_characters=security_cfg.context_char_budget,
+            max_chunks=security_cfg.context_max_chunks,
         )
         web_cache_chunks = self._retrieve_web_cache(user_message)
         self.logger.info(
             "Prepared context",
             extra={
                 "session_id": session_id,
+                "user_preview": user_message[:200],
                 "short_term": len(short_term),
                 "auto_chunks": len(auto_chunks),
                 "rag_chunks": len(rag_chunks),
                 "web_cache_chunks": len(web_cache_chunks),
                 "tool_results": len(tool_results or []),
                 "has_summary": bool(summary),
+                "rag_trust": self._summarize_trust(rag_chunks),
+                "web_trust": self._summarize_trust(web_cache_chunks),
             },
         )
         return MemoryContext(
@@ -122,11 +133,14 @@ class MemoryManager:
         if mem_cfg.web_cache_ttl_days > 0:
             cutoff = int(time.time()) - mem_cfg.web_cache_ttl_days * 86400
             filters = {"fetched_at": {"$gt": cutoff}}
+        security_cfg = self.config.security
         return retrieve_knowledge(
             query,
             top_k=max(3, mem_cfg.rag_k // 2),
             filters=filters,
             collection_name=self.config.collections.web_cache,
+            max_characters=security_cfg.context_char_budget,
+            max_chunks=max(3, min(mem_cfg.rag_k, security_cfg.context_max_chunks)),
         )
 
     def _retrieve_autobiographical(self, query: str, top_k: int) -> List[AutobiographicalChunk]:
@@ -277,7 +291,7 @@ class MemoryManager:
             ids=ids,
             texts=texts,
             embeddings=embeddings,
-            metadatas=metadatas,
+            metadatas=[{**metadata, "trust_level": TrustLevel.PERSONAL_HIGH.value} for metadata in metadatas],
         )
 
     # ---- Profile facts ---------------------------------------------------
@@ -324,9 +338,18 @@ class MemoryManager:
             raw_text=content,
             cleaned_text=content,
             url=url,
-            metadata={**meta, "session_id": session_id, "query_id": query_id},
+            metadata={**meta, "session_id": session_id, "query_id": query_id, "trust_level": TrustLevel.WEB_UNTRUSTED.value},
         )
         self.ingestion_manager.ingest_document(doc, session_mode=session_mode)
+        self.logger.info(
+            "Cached web result",
+            extra={
+                "session_id": session_id,
+                "url": url,
+                "query_id": query_id,
+                "trust_level": TrustLevel.WEB_UNTRUSTED.value,
+            },
+        )
 
     def process_tool_result(self, session_id: str, request: ToolRequest, result: ToolResult) -> None:
         """Persist bookkeeping for a tool result and cache outputs when applicable."""
@@ -340,6 +363,15 @@ class MemoryManager:
         )
         output_ref = result.metadata.get("url") or result.summary[:120]
         self.log_tool_run(session_id, result.tool_name, payload, output_ref)
+        self.logger.info(
+            "Tool run completed",
+            extra={
+                "session_id": session_id,
+                "tool": result.tool_name,
+                "summary": result.summary[:200],
+                "target": result.metadata.get("url") or result.metadata.get("namespace"),
+            },
+        )
         if (
             result.metadata.get("source_type") == "live_web"
             and result.content
@@ -370,9 +402,21 @@ class MemoryManager:
         if not embedding_vec:
             return []
         query_embedding = np.array(embedding_vec, dtype=float)
-        return self.vector_store.query(
+        documents = self.vector_store.query(
             namespace=target_namespace,
             query_embedding=query_embedding,
             k=top_k,
             filters=filters,
         )
+        for doc in documents:
+            meta = doc.metadata or {}
+            if "trust_level" not in meta:
+                meta["trust_level"] = TrustLevel.WEB_UNTRUSTED.value
+        return documents
+
+    def _summarize_trust(self, chunks: List[RetrievedChunk]) -> Dict[str, int]:
+        counts: Dict[str, int] = {}
+        for chunk in chunks:
+            trust = chunk.metadata.get("trust_level", "unknown")
+            counts[trust] = counts.get(trust, 0) + 1
+        return counts

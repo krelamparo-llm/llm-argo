@@ -1,0 +1,189 @@
+20251130: 
+Proposal: Argo Deep Research v1
+
+Let’s design a concrete architecture that fits Argo and borrows the right ideas.
+
+I’ll talk in Python-module terms, but this is just the spec; we can code it next.
+
+3.1 High-level flow
+
+For a user question Q:
+
+Planner step
+
+Prompt Argo: “Break Q into sub-questions and give an ordered plan.”
+
+Output: plan = [sub_q1, sub_q2, ...].
+
+Research cycles (N = depth, e.g., 2 or 3)
+For each cycle:
+
+a. For each active sub-question:
+
+Use search_web(sub_q) → get top K results.
+
+Filter obviously junk or duplicates by URL/domain/score.
+
+b. For each selected result:
+
+fetch_and_clean(url) → (clean_text, metadata).
+
+Ingest into Argo Brain under a session collection, e.g. deep_research/<session_id>.
+
+c. Ask LLM:
+
+“Given the collected context for Q, write a concise working summary and list specific gaps or unknowns.”
+
+Generate new sub-questions / refined queries from those gaps.
+
+d. Stop if:
+
+budget exhausted, or
+
+LLM judges confidence “good enough”.
+
+Synthesis
+
+Use all documents in deep_research/<session_id> (via a RAG retrieve) plus the working notes to write:
+
+A structured answer,
+
+A list of sources with URLs,
+
+Optional “What’s uncertain / contested” section.
+
+Persistence
+
+Everything lives in a session collection by default.
+
+Optionally, “pin” key documents or the final report into long-term Argo Brain memory (e.g. namespace web:research:permanent) if you want.
+
+This combines:
+
+local-deep-researcher’s iterative search–summarize–reflect loop, 
+GitHub
+
+GPT Researcher’s planner/executor/publisher split, 
+GitHub
+
+DeepSearcher’s 4-phase structure and query routing (we’ll extend to local vs web). 
+Milvus
+
+3.2 Components to add to Argo
+
+(1) argo_brain/web/search.py
+
+Abstract interface over different search providers.
+
+Conceptually:
+
+class SearchResult(TypedDict):
+    title: str
+    url: str
+    snippet: str
+    score: float
+
+class SearchBackend(Protocol):
+    def search(self, query: str, max_results: int = 10) -> list[SearchResult]:
+        ...
+
+
+Then concrete backends:
+
+DuckDuckGoBackend (using duckduckgo-search),
+
+optionally TavilyBackend if you’re ok with their API.
+
+Design it so swapping providers is just a config change, like local-deep-researcher and Open Deep Research do. 
+GitHub
++1
+
+(2) argo_brain/web/fetch.py
+
+Responsible for:
+
+HTTP GET with timeouts + size limits.
+
+Deduplicating URLs.
+
+Cleaning HTML → text.
+
+Rough functionality:
+
+def fetch_url(url: str, timeout_s: int = 15, max_bytes: int = 2_000_000) -> FetchedPage:
+    # downloads HTML safely
+
+def extract_readable_text(html: str, url: str) -> CleanPage:
+    # strips nav/ads/etc and returns main text + metadata
+
+
+You can use httpx for requests and something like trafilatura / readability-lxml for text extraction, which is exactly what a lot of these agents do under the hood.
+
+(3) argo_brain/agents/deep_research.py
+
+Top-level orchestrator. Something like:
+
+def run_deep_research(
+    question: str,
+    depth: int = 2,
+    max_urls_per_cycle: int = 8,
+    session_id: str | None = None,
+) -> DeepResearchReport:
+    ...
+
+
+Internally:
+
+Creates session_id and a corresponding vector namespace: deep_research/{session_id}.
+
+Calls your existing RAG ingestion helpers to store pages.
+
+Uses your LLM client (llama-server → Qwen3) for the planner / reflector / synthesizer steps.
+
+Borrow GPT Researcher’s separation:
+
+_plan_subquestions(question) -> list[str],
+
+_research_cycle(subquestions, session_id) -> (updated_subquestions, notes),
+
+_synthesize_report(question, session_id, notes) -> markdown.
+
+(4) Query routing between web vs Argo Brain
+
+Steal DeepSearcher’s idea of routing across collections. 
+Milvus
+
+Add a small “router” prompt:
+
+Given this question, should I:
+
+use only the user’s personal corpus,
+
+use only the web,
+
+or both?
+
+Then:
+
+If “personal only” → skip web search and just use your existing memory.
+
+If “both” → always mix in Argo Brain results in the final synthesis.
+
+Later we can get fancy and let it pick which namespaces (browsing_history, youtube, diary, etc.).
+
+3.3 Guardrails / config
+
+Add something like deep_research config to your config.py:
+
+MAX_CYCLES (e.g., 2–3),
+
+MAX_URLS_PER_CYCLE,
+
+MAX_CHARS_PER_PAGE,
+
+SEARCH_BACKEND (duckduckgo, tavily, etc.),
+
+PLANNER_MODEL, RESEARCH_MODEL, WRITER_MODEL (for now all your local Qwen3; later you can swap).
+
+This mirrors how open_deep_research and GPT Researcher expose their knobs. 
+GitHub

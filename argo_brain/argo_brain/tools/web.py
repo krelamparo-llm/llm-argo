@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import time
 from typing import Any, Dict, Optional
+from urllib.parse import urlparse
+import logging
 
 import requests
 import trafilatura
@@ -11,6 +13,8 @@ import trafilatura
 from ..core.memory.document import SourceDocument
 from ..core.memory.ingestion import IngestionManager, get_default_ingestion_manager
 from ..core.memory.session import SessionMode
+from ..config import CONFIG
+from ..security import TrustLevel
 from .base import Tool, ToolExecutionError, ToolRequest, ToolResult
 
 
@@ -46,26 +50,30 @@ class WebAccessTool:
         self.timeout = timeout
         self.user_agent = user_agent or "ArgoWebTool/1.0 (+https://argo.local)"
         self.ingestion_manager = ingestion_manager or get_default_ingestion_manager()
+        self.security = CONFIG.security
+        self.logger = logging.getLogger("argo_brain.tools.web")
 
     def run(self, request: ToolRequest) -> ToolResult:
         url = request.metadata.get("url") or request.query
-        if not url or not url.startswith(("http://", "https://")):
-            raise ToolExecutionError("WebAccessTool requires an http(s) URL in the query or metadata['url']")
+        url = self._validate_url(url)
 
         try:
             response = requests.get(url, timeout=self.timeout, headers={"User-Agent": self.user_agent})
             response.raise_for_status()
         except requests.RequestException as exc:  # noqa: PERF203 - capturing all network errors
             raise ToolExecutionError(f"Failed to fetch {url}: {exc}") from exc
+        final_url = self._validate_url(response.url)
 
         extracted = trafilatura.extract(response.text, include_comments=False, include_tables=False)
         content = extracted or response.text[:4000]
         summary = request.metadata.get("summary") or f"Retrieved {url}"
         metadata: Dict[str, Any] = {
-            "url": url,
+            "url": final_url,
             "fetched_at": int(time.time()),
             "session_id": request.session_id,
             "source_id": request.metadata.get("source_id", url),
+            "trust_level": TrustLevel.WEB_UNTRUSTED.value,
+            "http_status": response.status_code,
         }
         session_mode = request.session_mode
         src_type = "live_web" if session_mode == SessionMode.QUICK_LOOKUP else "web_article"
@@ -83,6 +91,14 @@ class WebAccessTool:
         self.ingestion_manager.ingest_document(doc, session_mode=session_mode)
         metadata["source_type"] = doc.source_type
         metadata["ingested"] = True
+        self.logger.info(
+            "WebAccessTool fetched",
+            extra={
+                "session_id": request.session_id,
+                "url": final_url,
+                "status": response.status_code,
+            },
+        )
         return ToolResult(
             tool_name=self.name,
             summary=summary,
@@ -90,3 +106,28 @@ class WebAccessTool:
             metadata=metadata,
             snippets=snippets,
         )
+
+    def _validate_url(self, url: Optional[str]) -> str:
+        if not url:
+            raise ToolExecutionError("WebAccessTool requires a URL")
+        parsed = urlparse(url)
+        if parsed.scheme not in self.security.web_allowed_schemes:
+            raise ToolExecutionError(f"URL scheme '{parsed.scheme}' is not allowed")
+        if not parsed.netloc:
+            raise ToolExecutionError("URL must include a host")
+        allowed_hosts = self.security.web_allowed_hosts
+        if allowed_hosts:
+            hostname = parsed.hostname or ""
+            normalized = hostname.lower()
+            allowed = False
+            for entry in allowed_hosts:
+                entry_norm = entry.lower()
+                if entry_norm.startswith(".") and normalized.endswith(entry_norm):
+                    allowed = True
+                    break
+                if normalized == entry_norm:
+                    allowed = True
+                    break
+            if not allowed:
+                raise ToolExecutionError(f"Host '{hostname}' is not allow-listed")
+        return parsed.geturl()

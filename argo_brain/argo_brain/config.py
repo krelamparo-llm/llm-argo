@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Final
 
@@ -79,6 +79,43 @@ DEFAULT_LLAMA_URL = _get_llm_setting("base_url", "http://127.0.0.1:8080/v1/chat/
 DEFAULT_LLAMA_MODEL = _get_llm_setting("model", "local-llm")
 
 
+def _security_phrases_default() -> tuple[str, ...]:
+    base = [
+        "ignore previous instructions",
+        "override the system prompt",
+        "you are now",
+        "forget all prior",
+        "begin system override",
+    ]
+    return _get_security_list_setting("suspicious_phrases", base)
+
+
+def _security_scheme_default() -> tuple[str, ...]:
+    return _get_security_list_setting("web_allowed_schemes", ["http", "https"])
+
+
+def _security_host_default() -> tuple[str, ...]:
+    return _get_security_list_setting("web_allowed_hosts", [])
+
+
+def _get_security_list_setting(name: str, default: list[str]) -> tuple[str, ...]:
+    env_key = f"ARGO_SECURITY_{name.upper()}"
+    if env_key in os.environ:
+        raw = os.environ[env_key]
+    else:
+        security_section = _CONFIG_DATA.get("security", {})
+        raw = security_section.get(name)
+    if raw is None:
+        return tuple(default)
+    if isinstance(raw, str):
+        items = [item.strip() for item in raw.split(",") if item.strip()]
+    elif isinstance(raw, (list, tuple)):
+        items = [str(item).strip() for item in raw if str(item).strip()]
+    else:
+        return tuple(default)
+    return tuple(items) if items else tuple(default)
+
+
 @dataclass(frozen=True)
 class MemoryConfig:
     """Tunable parameters for the layered memory system."""
@@ -138,6 +175,18 @@ class VectorStoreConfig:
 
 
 @dataclass(frozen=True)
+class SecurityConfig:
+    """Application-layer security controls."""
+
+    context_max_chunks: int = int(os.environ.get("ARGO_SECURITY_CONTEXT_MAX_CHUNKS", 8))
+    context_char_budget: int = int(os.environ.get("ARGO_SECURITY_CONTEXT_CHAR_BUDGET", 6000))
+    enable_injection_filter: bool = bool(int(os.environ.get("ARGO_SECURITY_ENABLE_INJECTION_FILTER", "1")))
+    suspicious_phrases: tuple[str, ...] = field(default_factory=_security_phrases_default)
+    web_allowed_schemes: tuple[str, ...] = field(default_factory=_security_scheme_default)
+    web_allowed_hosts: tuple[str, ...] = field(default_factory=_security_host_default)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Aggregate configuration for the Argo Brain runtime."""
 
@@ -147,6 +196,7 @@ class AppConfig:
     llm: LLMConfig = LLMConfig()
     embed_model: str = DEFAULT_EMBED_MODEL
     vector_store: VectorStoreConfig = VectorStoreConfig()
+    security: SecurityConfig = SecurityConfig()
 
 
 CONFIG: Final[AppConfig] = AppConfig()

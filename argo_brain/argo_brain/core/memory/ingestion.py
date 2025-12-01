@@ -16,6 +16,7 @@ from ...llm_client import ChatMessage, LLMClient
 from ..vector_store.factory import create_vector_store
 from .document import SourceDocument
 from .session import SessionMode
+from ...security import TrustLevel, ensure_trust_metadata, trust_level_for_source
 
 Metadata = Dict[str, Any]
 
@@ -59,6 +60,7 @@ class IngestionManager:
     ) -> None:
         """Decide a policy and persist the document accordingly."""
 
+        self._trust_level_for_doc(doc)
         body = doc.content()
         if not body:
             return
@@ -196,16 +198,35 @@ class IngestionManager:
             metadata.setdefault("url", doc.url)
         if doc.title:
             metadata.setdefault("title", doc.title)
+        trust_value = metadata.get("trust_level")
+        try:
+            TrustLevel(trust_value)
+        except (ValueError, TypeError):
+            metadata["trust_level"] = trust_level_for_source(metadata.get("source_type")).value
         return metadata
+
+    def _trust_level_for_doc(self, doc: SourceDocument) -> TrustLevel:
+        metadata = doc.metadata or {}
+        trust_value = metadata.get("trust_level")
+        try:
+            level = TrustLevel(trust_value)
+        except (ValueError, TypeError):
+            level = trust_level_for_source(doc.source_type)
+        doc.metadata = ensure_trust_metadata(metadata, level)
+        return level
 
     def _chunk_id(self, doc: SourceDocument, suffix: Any) -> str:
         return f"{doc.id}:{suffix}:{uuid4().hex[:8]}"
 
     def _namespace_for(self, doc: SourceDocument) -> str:
-        if doc.source_type.startswith("youtube"):
+        level = self._trust_level_for_doc(doc)
+        source_type = (doc.source_type or "").lower()
+        if source_type.startswith("youtube"):
             return self.config.collections.youtube
-        if doc.source_type in {"note", "session_summary"}:
+        if level is TrustLevel.PERSONAL_HIGH:
             return self.config.collections.notes
+        if level is TrustLevel.TOOL_OUTPUT:
+            return self.config.collections.web_cache
         return self.config.collections.web_articles
 
     def _summarize(self, text: str, doc: SourceDocument) -> Optional[str]:
