@@ -1,12 +1,14 @@
 [data]
-root = "/home/krela/.argo_data"
-state_dir = "/home/krela/.argo_data/state"
-data_raw_path = "/home/krela/.argo_data/data_raw"
+# Using project directory for data storage
+# Alternative: Use "/home/krela/.argo_data" for home directory storage
+root = "/home/krela/llm-argo/.argo_data"
+state_dir = "/home/krela/llm-argo/.argo_data/state"
+data_raw_path = "/home/krela/llm-argo/.argo_data/data_raw"
 models_root = "/mnt/d/llm/models"
 
 [vector_store]
 backend = "chroma"
-path = "/home/krela/.argo_data/vectordb"
+path = "/home/krela/llm-argo/.argo_data/vectordb"
 
 [llm]
 base_url = "http://127.0.0.1:8080/v1/chat/completions"
