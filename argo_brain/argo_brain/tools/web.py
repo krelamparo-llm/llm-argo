@@ -12,7 +12,6 @@ import trafilatura
 
 from ..core.memory.document import SourceDocument
 from ..core.memory.ingestion import IngestionManager, get_default_ingestion_manager
-from ..core.memory.session import SessionMode
 from ..config import CONFIG
 from ..security import TrustLevel
 from .base import Tool, ToolExecutionError, ToolRequest, ToolResult
@@ -67,6 +66,12 @@ class WebAccessTool:
         extracted = trafilatura.extract(response.text, include_comments=False, include_tables=False)
         content = extracted or response.text[:4000]
         summary = request.metadata.get("summary") or f"Retrieved {url}"
+
+        # Determine if this is ephemeral (deep research) or archival
+        # For now, treat as ephemeral - future browser history daemon will use archival
+        ephemeral = True
+        src_type = "live_web"
+
         metadata: Dict[str, Any] = {
             "url": final_url,
             "fetched_at": int(time.time()),
@@ -74,10 +79,8 @@ class WebAccessTool:
             "source_id": request.metadata.get("source_id", url),
             "trust_level": TrustLevel.WEB_UNTRUSTED.value,
             "http_status": response.status_code,
+            "source_type": src_type,
         }
-        session_mode = request.session_mode
-        src_type = "live_web" if session_mode == SessionMode.QUICK_LOOKUP else "web_article"
-        metadata["source_type"] = src_type
         snippets = [content[:500]] if content else []
         doc = SourceDocument(
             id=str(metadata["source_id"]),
@@ -88,7 +91,7 @@ class WebAccessTool:
             title=request.metadata.get("title"),
             metadata=metadata,
         )
-        self.ingestion_manager.ingest_document(doc, session_mode=session_mode)
+        self.ingestion_manager.ingest_document(doc, ephemeral=ephemeral)
         metadata["source_type"] = doc.source_type
         metadata["ingested"] = True
         self.logger.info(

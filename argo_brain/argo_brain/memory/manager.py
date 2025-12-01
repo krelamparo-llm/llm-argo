@@ -1,4 +1,12 @@
-"""High-level memory orchestration for Argo Brain."""
+"""High-level memory orchestration for Argo Brain.
+
+MemoryManager focuses on:
+- Assembling context from multiple memory layers
+- Extracting and storing autobiographical memories
+- Querying the knowledge base
+
+Session management and tool tracking are delegated to SessionManager and ToolTracker.
+"""
 
 from __future__ import annotations
 
@@ -7,26 +15,19 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
 
 import numpy as np
 
 from ..config import CONFIG
-from ..core.memory.document import SourceDocument
-from ..core.memory.ingestion import IngestionManager
-from ..core.memory.session import SessionMode
 from ..embeddings import embed_single, embed_texts
 from ..llm_client import ChatMessage, LLMClient
 from ..rag import RetrievedChunk, retrieve_knowledge
-from ..tools.base import ToolRequest, ToolResult
-from ..vector_store import Document, get_vector_store
+from ..tools.base import ToolResult
+from ..vector_store import get_vector_store
 from ..utils.json_helpers import extract_json_object
-from .db import MemoryDB, MessageRecord, ProfileFact, ToolRunRecord
-from .prompts import (
-    MEMORY_WRITER_INSTRUCTIONS,
-    SESSION_SUMMARY_INSTRUCTIONS,
-    format_messages_for_prompt,
-)
+from .db import MemoryDB, MessageRecord, ProfileFact
+from .prompts import MEMORY_WRITER_INSTRUCTIONS, format_messages_for_prompt
+from .session_manager import SessionManager
 from ..security import TrustLevel
 
 
@@ -53,43 +54,57 @@ class MemoryContext:
 
 
 class MemoryManager:
-    """Coordinates SQLite, Chroma, and LLM prompts for memory."""
+    """Retrieves and writes autobiographical memories.
+
+    Focuses on memory-specific operations:
+    - Context assembly from 8 layers
+    - Autobiographical memory extraction and storage
+    - Generic knowledge base queries
+
+    Delegates to:
+    - SessionManager: conversation lifecycle and summarization
+    - ToolTracker: tool execution logging (handled by orchestrator)
+    """
 
     def __init__(
         self,
         db: Optional[MemoryDB] = None,
         llm_client: Optional[LLMClient] = None,
+        session_manager: Optional[SessionManager] = None,
         *,
         vector_store=None,
-        ingestion_manager: Optional[IngestionManager] = None,
     ) -> None:
         self.db = db or MemoryDB()
         self.llm_client = llm_client or LLMClient()
+        self.session_manager = session_manager or SessionManager(self.db, self.llm_client)
         self.config = CONFIG
         self.logger = logging.getLogger("argo_brain.memory")
         self.vector_store = vector_store or get_vector_store()
-        self.ingestion_manager = ingestion_manager or IngestionManager(
-            vector_store=self.vector_store,
-            llm_client=self.llm_client,
-        )
 
-    # ---- Session helpers -------------------------------------------------
-    def ensure_session(self, session_id: str) -> None:
-        self.db.ensure_session(session_id)
-
-    # ---- Retrieval -------------------------------------------------------
+    # ---- Context Assembly ------------------------------------------------
     def get_context_for_prompt(
         self,
         session_id: str,
         user_message: str,
         tool_results: Optional[List[ToolResult]] = None,
     ) -> MemoryContext:
-        """Return layered context for the assistant prompt."""
+        """Assemble 8-layer context for the assistant prompt.
 
+        Layers:
+        1. Short-term message buffer (from SessionManager)
+        2. Session summary (from SessionManager)
+        3. Autobiographical memory (vector search)
+        4. RAG knowledge chunks (trust-ordered)
+        5. Web cache (ephemeral, TTL-filtered)
+        6. Tool results (passed in)
+        7-8. Profile facts and snapshots (accessed via SQLite)
+        """
         mem_cfg = self.config.memory
         security_cfg = self.config.security
-        short_term = self.db.get_recent_messages(session_id, mem_cfg.short_term_window)
-        summary = self.db.get_session_summary(session_id)
+
+        # Delegate to SessionManager for conversation context
+        short_term = self.session_manager.get_recent_messages(session_id)
+        summary = self.session_manager.get_session_summary(session_id)
         auto_chunks = self._retrieve_autobiographical(user_message, mem_cfg.autobiographical_k)
         rag_chunks = retrieve_knowledge(
             user_message,
@@ -167,127 +182,113 @@ class MemoryManager:
             )
         return chunks
 
-    def get_session_summary(self, session_id: str) -> Optional[str]:
-        """Expose the latest summary for CLI inspection."""
-
-        return self.db.get_session_summary(session_id)
-
-    # ---- Persistence -----------------------------------------------------
-    def record_interaction(
+    # ---- Memory Extraction -----------------------------------------------
+    def extract_and_store_memories(
         self,
         session_id: str,
-        user_message: str,
-        assistant_response: str,
+        recent_turns: List[MessageRecord],
     ) -> None:
-        """Persist the latest turn and trigger summary + memory updates."""
+        """Extract autobiographical facts from recent conversation and store them.
+
+        This is called after each interaction to extract long-lived facts about
+        the user from the conversation.
+        """
+        if not recent_turns:
+            return
 
         start = time.perf_counter()
-        self.db.add_message(session_id, "user", user_message)
-        self.db.add_message(session_id, "assistant", assistant_response)
-        summary = self._maybe_update_summary(session_id)
-        self._run_memory_writer(session_id, user_message, assistant_response, summary)
+        memories = self._run_memory_writer(recent_turns)
+        if memories:
+            self._store_autobiographical_memories(memories)
+            self.logger.info(
+                "Stored autobiographical memories",
+                extra={"session_id": session_id, "items": len(memories)},
+            )
         elapsed = time.perf_counter() - start
-        self.logger.info(
-            "Recorded interaction",
+        self.logger.debug(
+            "Memory extraction completed",
             extra={"session_id": session_id, "elapsed_ms": round(elapsed * 1000, 2)},
         )
 
-    # ---- Summaries -------------------------------------------------------
-    def _maybe_update_summary(self, session_id: str) -> Optional[str]:
-        mem_cfg = self.config.memory
-        total_messages = self.db.count_messages(session_id)
-        existing_summary = self.db.get_session_summary(session_id)
-        needs_summary = existing_summary is None or (total_messages % mem_cfg.summary_interval == 0)
-        if not needs_summary:
-            return existing_summary
-        history = self.db.get_all_messages(session_id, limit=mem_cfg.summary_history_limit)
-        if not history:
-            return existing_summary
-        conversation_text = format_messages_for_prompt(history)
-        prompt_body = (
-            f"Existing summary (may be empty):\n{existing_summary or 'None'}\n\n"
-            f"Recent conversation:\n{conversation_text}\n\nUpdate the summary."
-        )
-        messages = [
-            ChatMessage(role="system", content=SESSION_SUMMARY_INSTRUCTIONS),
-            ChatMessage(role="user", content=prompt_body),
-        ]
-        summary = self.llm_client.chat(messages, temperature=0.1, max_tokens=256)
-        snapshot_interval = mem_cfg.summary_snapshot_interval
-        if (
-            existing_summary
-            and snapshot_interval > 0
-            and total_messages % snapshot_interval == 0
-        ):
-            self.db.add_summary_snapshot(session_id, existing_summary)
-            self.logger.debug(
-                "Archived summary snapshot",
-                extra={"session_id": session_id, "messages": total_messages},
-            )
-        self.db.upsert_session_summary(session_id, summary)
-        self.logger.debug("Session summary updated", extra={"session_id": session_id})
-        return summary
-
-    # ---- Memory writer ---------------------------------------------------
     def _run_memory_writer(
         self,
-        session_id: str,
-        user_message: str,
-        assistant_response: str,
-        session_summary: Optional[str],
-    ) -> None:
-        summary_text = session_summary or self.db.get_session_summary(session_id) or "None yet."
-        prompt_body = (
-            f"Session summary:\n{summary_text}\n\n"
-            "Latest exchange:\n"
-            f"User: {user_message}\n"
-            f"Assistant: {assistant_response}\n"
-            "Remember only reusable facts."
-        )
+        recent_turns: List[MessageRecord],
+    ) -> List[Dict[str, str]]:
+        """Use LLM to extract memories from recent conversation."""
+        if not recent_turns:
+            return []
+
+        # Format recent turns as transcript
+        transcript = format_messages_for_prompt(recent_turns)
+        prompt_body = f"Recent conversation:\n{transcript}\n\nExtract long-lived facts about the user."
+
         messages = [
             ChatMessage(role="system", content=MEMORY_WRITER_INSTRUCTIONS),
             ChatMessage(role="user", content=prompt_body),
         ]
-        raw_response = self.llm_client.chat(messages, temperature=0.1, max_tokens=256)
-        data = extract_json_object(raw_response)
+
+        try:
+            raw_response = self.llm_client.chat(messages, temperature=0.1, max_tokens=256)
+        except Exception as e:
+            self.logger.error("Memory writer LLM call failed", exc_info=True, extra={"error": str(e)})
+            return []
+
+        try:
+            data = extract_json_object(raw_response)
+        except (ValueError, json.JSONDecodeError) as e:
+            self.logger.warning("Memory writer returned invalid JSON", extra={"error": str(e)})
+            return []
+
         if not isinstance(data, dict):
-            self.logger.warning("Memory writer returned non-JSON or invalid JSON object")
-            return
+            self.logger.warning("Memory writer returned non-dict")
+            return []
+
         memories = data.get("memories", [])
         if not isinstance(memories, list) or not memories:
-            return
-        texts = []
-        metadatas = []
+            return []
+
+        # Extract session_id from first turn (all should have same session_id)
+        session_id = recent_turns[0].session_id if recent_turns else "unknown"
+
+        # Build memory records
+        memory_records = []
         for memory in memories:
             text = (memory or {}).get("text", "").strip()
             mem_type = (memory or {}).get("type", "fact")
             if not text:
                 continue
+
+            # Store in SQLite profile_facts
             self.db.add_profile_fact(
                 text,
                 user_id="default",
                 source_session_id=session_id,
             )
-            texts.append(text)
-            metadatas.append(
-                {
+
+            memory_records.append({
+                "text": text,
+                "metadata": {
                     "session_id": session_id,
                     "type": mem_type,
                     "source_type": "conversation",
                 }
-            )
-        if texts:
-            self._store_autobiographical_memories(texts, metadatas)
-            self.logger.info(
-                "Stored autobiographical memories",
-                extra={"session_id": session_id, "items": len(texts)},
-            )
+            })
 
-    def _store_autobiographical_memories(self, texts: List[str], metadatas: List[Dict[str, str]]) -> None:
+        return memory_records
+
+    def _store_autobiographical_memories(self, memory_records: List[Dict[str, str]]) -> None:
+        """Store extracted memories in vector store."""
+        if not memory_records:
+            return
+
+        texts = [record["text"] for record in memory_records]
+        metadatas = [record["metadata"] for record in memory_records]
+
         embeddings = np.array(embed_texts(texts), dtype=float)
-        ids = [f"auto:{uuid4().hex}" for _ in texts]
+        ids = [f"auto:{time.time()}:{idx}" for idx in range(len(texts))]
+
         self.vector_store.add(
-            namespace=self.config.collections.autobiographical,
+            namespace=self.config.collections.autobiographical_memory,
             ids=ids,
             texts=texts,
             embeddings=embeddings,
@@ -296,97 +297,14 @@ class MemoryManager:
 
     # ---- Profile facts ---------------------------------------------------
     def list_profile_facts(self, active_only: bool = True) -> List[ProfileFact]:
+        """List stored profile facts from SQLite."""
         return self.db.list_profile_facts(active_only=active_only)
 
-    def set_profile_fact_active(self, fact_id: int, is_active: bool) -> None:
+    def set_fact_active(self, fact_id: int, is_active: bool) -> None:
+        """Toggle visibility of a profile fact."""
         self.db.set_profile_fact_active(fact_id, is_active)
 
-    # ---- Tooling --------------------------------------------------------
-    def log_tool_run(
-        self,
-        session_id: str,
-        tool_name: str,
-        input_payload: str,
-        output_ref: Optional[str] = None,
-    ) -> int:
-        """Persist a tool invocation to SQLite."""
-
-        return self.db.log_tool_run(session_id, tool_name, input_payload, output_ref)
-
-    def recent_tool_runs(self, session_id: str, limit: int = 10):
-        return self.db.recent_tool_runs(session_id, limit=limit)
-
-    def cache_web_result(
-        self,
-        *,
-        session_id: str,
-        content: str,
-        url: str,
-        query_id: Optional[str] = None,
-        extra_meta: Optional[Dict[str, Any]] = None,
-        session_mode: SessionMode = SessionMode.QUICK_LOOKUP,
-    ) -> None:
-        """Store a snippet fetched from the live web into the web cache collection."""
-
-        meta = extra_meta.copy() if extra_meta else {}
-        source_id = meta.get("source_id", url)
-        if "fetched_at" not in meta:
-            meta["fetched_at"] = int(time.time())
-        doc = SourceDocument(
-            id=str(source_id),
-            source_type=meta.get("source_type", "live_web"),
-            raw_text=content,
-            cleaned_text=content,
-            url=url,
-            metadata={**meta, "session_id": session_id, "query_id": query_id, "trust_level": TrustLevel.WEB_UNTRUSTED.value},
-        )
-        self.ingestion_manager.ingest_document(doc, session_mode=session_mode)
-        self.logger.info(
-            "Cached web result",
-            extra={
-                "session_id": session_id,
-                "url": url,
-                "query_id": query_id,
-                "trust_level": TrustLevel.WEB_UNTRUSTED.value,
-            },
-        )
-
-    def process_tool_result(self, session_id: str, request: ToolRequest, result: ToolResult) -> None:
-        """Persist bookkeeping for a tool result and cache outputs when applicable."""
-
-        payload = json.dumps(
-            {
-                "query": request.query,
-                "metadata": request.metadata,
-            },
-            ensure_ascii=False,
-        )
-        output_ref = result.metadata.get("url") or result.summary[:120]
-        self.log_tool_run(session_id, result.tool_name, payload, output_ref)
-        self.logger.info(
-            "Tool run completed",
-            extra={
-                "session_id": session_id,
-                "tool": result.tool_name,
-                "summary": result.summary[:200],
-                "target": result.metadata.get("url") or result.metadata.get("namespace"),
-            },
-        )
-        if (
-            result.metadata.get("source_type") == "live_web"
-            and result.content
-            and not result.metadata.get("ingested")
-        ):
-            self.cache_web_result(
-                session_id=session_id,
-                content=result.content,
-                url=result.metadata.get("url", result.summary),
-                query_id=request.metadata.get("query_id"),
-                extra_meta=result.metadata,
-                session_mode=request.session_mode,
-            )
-
-    # ---- External query helpers -------------------------------------------
+    # ---- Generic Memory Query --------------------------------------------
     def query_memory(
         self,
         query: str,
@@ -394,13 +312,19 @@ class MemoryManager:
         namespace: Optional[str] = None,
         top_k: int = 5,
         filters: Optional[Dict[str, Any]] = None,
-    ) -> List[Document]:
-        """Retrieve chunks from the configured vector store for arbitrary tools."""
+    ) -> List[Any]:  # Returns Document objects from vector store
+        """Retrieve chunks from vector store (used by MemoryQueryTool).
 
-        target_namespace = namespace or self.config.collections.rag
+        This is a general-purpose query interface that tools can use to search
+        the knowledge base.
+        """
+        from ..vector_store import Document
+
+        target_namespace = namespace or self.config.collections.web_articles
         embedding_vec = embed_single(query)
         if not embedding_vec:
             return []
+
         query_embedding = np.array(embedding_vec, dtype=float)
         documents = self.vector_store.query(
             namespace=target_namespace,
@@ -408,10 +332,13 @@ class MemoryManager:
             k=top_k,
             filters=filters,
         )
+
+        # Ensure all documents have trust metadata
         for doc in documents:
             meta = doc.metadata or {}
             if "trust_level" not in meta:
                 meta["trust_level"] = TrustLevel.WEB_UNTRUSTED.value
+
         return documents
 
     def _summarize_trust(self, chunks: List[RetrievedChunk]) -> Dict[str, int]:

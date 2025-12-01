@@ -59,21 +59,40 @@ SQLITE_PATH = Path(
     os.environ.get("ARGO_SQLITE_PATH", STATE_DIR / "argo_memory.sqlite3")
 )
 
+# Collection names (aligned with main.txt spec)
 DEFAULT_AUTOBIO_COLLECTION = os.environ.get(
     "ARGO_AUTOBIO_COLLECTION", "argo_autobiographical_memory"
 )
 DEFAULT_WEB_CACHE_COLLECTION = os.environ.get(
     "ARGO_WEB_CACHE_COLLECTION", "argo_web_cache"
 )
+# Renamed to match main.txt: reading_history
+DEFAULT_READING_HISTORY_COLLECTION = os.environ.get(
+    "ARGO_READING_HISTORY_COLLECTION", "argo_reading_history"
+)
+# Renamed to match main.txt: youtube_history
+DEFAULT_YOUTUBE_HISTORY_COLLECTION = os.environ.get(
+    "ARGO_YOUTUBE_HISTORY_COLLECTION", "argo_youtube_history"
+)
+# Renamed to match main.txt: notes_journal
+DEFAULT_NOTES_JOURNAL_COLLECTION = os.environ.get(
+    "ARGO_NOTES_JOURNAL_COLLECTION", "argo_notes_journal"
+)
+
+# Backward compatibility - OLD names (deprecated)
 DEFAULT_WEB_ARTICLE_COLLECTION = os.environ.get(
-    "ARGO_WEB_ARTICLE_COLLECTION", "argo_web_articles"
+    "ARGO_WEB_ARTICLE_COLLECTION", DEFAULT_READING_HISTORY_COLLECTION
 )
 DEFAULT_RAG_COLLECTION = os.environ.get(
     "ARGO_RAG_COLLECTION",
-    DEFAULT_WEB_ARTICLE_COLLECTION,
+    DEFAULT_READING_HISTORY_COLLECTION,
 )
-DEFAULT_YOUTUBE_COLLECTION = os.environ.get("ARGO_YOUTUBE_COLLECTION", "argo_youtube")
-DEFAULT_NOTES_COLLECTION = os.environ.get("ARGO_NOTES_COLLECTION", "argo_notes")
+DEFAULT_YOUTUBE_COLLECTION = os.environ.get(
+    "ARGO_YOUTUBE_COLLECTION", DEFAULT_YOUTUBE_HISTORY_COLLECTION
+)
+DEFAULT_NOTES_COLLECTION = os.environ.get(
+    "ARGO_NOTES_COLLECTION", DEFAULT_NOTES_JOURNAL_COLLECTION
+)
 DEFAULT_EMBED_MODEL = os.environ.get("ARGO_EMBED_MODEL", "BAAI/bge-m3")
 DEFAULT_LLAMA_URL = _get_llm_setting("base_url", "http://127.0.0.1:8080/v1/chat/completions")
 DEFAULT_LLAMA_MODEL = _get_llm_setting("model", "local-llm")
@@ -155,15 +174,63 @@ class Paths:
 
 
 @dataclass(frozen=True)
-class Collections:
-    """Chroma collection names."""
+class RetentionPolicy:
+    """Defines retention rules for a namespace."""
 
-    rag: str = DEFAULT_RAG_COLLECTION
-    autobiographical: str = DEFAULT_AUTOBIO_COLLECTION
+    ttl_days: int | None = None  # None = keep forever
+    enable_decay: bool = True
+    decay_half_life_days: int = 90  # Score halves every N days
+    max_age_days: int | None = None  # Hard cutoff (not currently used)
+
+
+@dataclass(frozen=True)
+class Collections:
+    """Chroma collection names (aligned with main.txt specification)."""
+
+    # New canonical names (match main.txt)
+    reading_history: str = DEFAULT_READING_HISTORY_COLLECTION
+    youtube_history: str = DEFAULT_YOUTUBE_HISTORY_COLLECTION
+    notes_journal: str = DEFAULT_NOTES_JOURNAL_COLLECTION
+    autobiographical_memory: str = DEFAULT_AUTOBIO_COLLECTION
     web_cache: str = DEFAULT_WEB_CACHE_COLLECTION
-    web_articles: str = DEFAULT_WEB_ARTICLE_COLLECTION
-    youtube: str = DEFAULT_YOUTUBE_COLLECTION
-    notes: str = DEFAULT_NOTES_COLLECTION
+
+    # Backward compatibility aliases (DEPRECATED - use new names)
+    rag: str = DEFAULT_RAG_COLLECTION  # Alias for reading_history
+    web_articles: str = DEFAULT_WEB_ARTICLE_COLLECTION  # OLD name
+    youtube: str = DEFAULT_YOUTUBE_COLLECTION  # OLD name
+    notes: str = DEFAULT_NOTES_COLLECTION  # OLD name
+    autobiographical: str = DEFAULT_AUTOBIO_COLLECTION  # OLD name
+
+    # Retention policies per namespace
+    _policies: Dict[str, RetentionPolicy] = field(default_factory=lambda: {
+        "argo_reading_history": RetentionPolicy(
+            ttl_days=None,  # Keep forever
+            enable_decay=True,
+            decay_half_life_days=180,  # 6 months
+        ),
+        "argo_youtube_history": RetentionPolicy(
+            ttl_days=None,
+            enable_decay=True,
+            decay_half_life_days=180,
+        ),
+        "argo_notes_journal": RetentionPolicy(
+            ttl_days=None,  # High-trust notes never expire
+            enable_decay=False,  # Always full weight
+        ),
+        "argo_autobiographical_memory": RetentionPolicy(
+            ttl_days=None,
+            enable_decay=False,  # Personal facts always relevant
+        ),
+        "argo_web_cache": RetentionPolicy(
+            ttl_days=7,  # Ephemeral - 1 week
+            enable_decay=True,
+            decay_half_life_days=3,  # Decay fast
+        ),
+    })
+
+    def get_policy(self, namespace: str) -> RetentionPolicy:
+        """Get retention policy for namespace."""
+        return self._policies.get(namespace, RetentionPolicy())
 
 
 @dataclass(frozen=True)

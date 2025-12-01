@@ -12,8 +12,8 @@ import trafilatura
 
 from .config import CONFIG
 from .core.memory.document import SourceDocument
-from .core.memory.ingestion import IngestionPolicy, get_default_ingestion_manager
-from .core.memory.session import SessionMode
+from .core.memory.ingestion import get_default_ingestion_manager
+from .core.memory.decay import apply_decay_scoring, filter_expired
 from .embeddings import embed_single
 from .llm_client import ChatMessage, LLMClient
 from .vector_store import get_vector_store
@@ -43,8 +43,11 @@ def ingest_text(
     *,
     collection_name: Optional[str] = None,
 ) -> None:
-    """Backward-compatible wrapper that routes through the ingestion manager."""
+    """Ingest text into appropriate namespace based on source_type.
 
+    This is the main entry point for archival ingestion (browser history,
+    YouTube transcripts, explicit saves). Content is stored as full chunks.
+    """
     doc = SourceDocument(
         id=source_id,
         source_type=source_type,
@@ -53,12 +56,7 @@ def ingest_text(
         url=url,
         metadata=extra_meta or {},
     )
-    _INGESTION_MANAGER.ingest_document(
-        doc,
-        session_mode=SessionMode.INGEST,
-        user_intent="explicit_save",
-        policy_override=IngestionPolicy.FULL,
-    )
+    _INGESTION_MANAGER.ingest_document(doc, ephemeral=False)
 
 
 def _fetch_html(url: str, timeout: int = 25) -> str:
@@ -89,8 +87,10 @@ def ingest_web_result(
     fetched_at: Optional[int] = None,
     extra_meta: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """Store live web browsing output into the dedicated web cache collection."""
+    """Store live web content in ephemeral cache with TTL.
 
+    Used during deep research for temporary web fetches that should expire.
+    """
     metadata = {
         "url": url,
         "source_type": "live_web",
@@ -108,11 +108,7 @@ def ingest_web_result(
         url=url,
         metadata=metadata,
     )
-    _INGESTION_MANAGER.ingest_document(
-        doc,
-        session_mode=SessionMode.QUICK_LOOKUP,
-        policy_override=IngestionPolicy.EPHEMERAL,
-    )
+    _INGESTION_MANAGER.ingest_document(doc, ephemeral=True)
 
 
 def retrieve_knowledge(
@@ -165,6 +161,11 @@ def retrieve_knowledge(
             k=remaining,
             filters=filters,
         )
+
+        # Apply decay scoring and TTL filtering
+        documents = filter_expired(documents, namespace)
+        documents = apply_decay_scoring(documents, namespace)
+
         for doc in documents:
             text = (doc.text or "").strip()
             if not text:

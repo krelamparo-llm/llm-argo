@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence
 from uuid import uuid4
 
@@ -12,21 +11,11 @@ import numpy as np
 
 from ...config import CONFIG
 from ...embeddings import embed_texts
-from ...llm_client import ChatMessage, LLMClient
 from ..vector_store.factory import create_vector_store
 from .document import SourceDocument
-from .session import SessionMode
 from ...security import TrustLevel, ensure_trust_metadata, trust_level_for_source
 
 Metadata = Dict[str, Any]
-
-
-class IngestionPolicy(str, Enum):
-    """Controls how aggressively a document is persisted."""
-
-    EPHEMERAL = "ephemeral"
-    SUMMARY_ONLY = "summary_only"
-    FULL = "full"
 
 
 def _default_embedder(texts: Sequence[str]) -> List[List[float]]:
@@ -35,10 +24,9 @@ def _default_embedder(texts: Sequence[str]) -> List[List[float]]:
 
 @dataclass
 class IngestionManager:
-    """Coordinates chunking, summarization, and vector store writes."""
+    """Coordinates chunking and vector store writes for document ingestion."""
 
     vector_store: Optional[Any] = None
-    llm_client: Optional[LLMClient] = None
     embedder: Optional[Callable[[Sequence[str]], List[List[float]]]] = None
     chunk_size: int = 800
     chunk_overlap: int = 200
@@ -46,7 +34,6 @@ class IngestionManager:
     def __post_init__(self) -> None:
         self.config = CONFIG
         self.vector_store = self.vector_store or create_vector_store()
-        self.llm_client = self.llm_client or LLMClient()
         self.embedder = self.embedder or _default_embedder
 
     # Public API ---------------------------------------------------------
@@ -54,87 +41,37 @@ class IngestionManager:
         self,
         doc: SourceDocument,
         *,
-        session_mode: SessionMode = SessionMode.QUICK_LOOKUP,
-        user_intent: Optional[str] = None,
-        policy_override: Optional[IngestionPolicy] = None,
+        ephemeral: bool = False,
     ) -> None:
-        """Decide a policy and persist the document accordingly."""
+        """Store document chunks in appropriate namespace.
 
+        Args:
+            doc: The document to ingest
+            ephemeral: If True, store in web_cache with TTL metadata
+        """
         self._trust_level_for_doc(doc)
         body = doc.content()
         if not body:
             return
-        policy = policy_override or self._decide_policy(doc, session_mode, user_intent)
-        if policy == IngestionPolicy.EPHEMERAL:
-            self._store_ephemeral(doc, body)
-            return
-        if policy == IngestionPolicy.SUMMARY_ONLY:
-            summary = self._summarize(body, doc)
-            if summary:
-                self._store_summary(doc, summary)
-            return
-        if policy == IngestionPolicy.FULL:
-            self._store_full(doc, body)
-            return
-        raise ValueError(f"Unsupported ingestion policy: {policy}")
 
-    # Policy helpers -----------------------------------------------------
-    def _decide_policy(
-        self,
-        doc: SourceDocument,
-        session_mode: SessionMode,
-        user_intent: Optional[str],
-    ) -> IngestionPolicy:
-        override = doc.metadata.get("ingestion_policy")
-        if isinstance(override, str):
-            try:
-                return IngestionPolicy(override)
-            except ValueError:
-                pass
-        if user_intent == "explicit_save":
-            return IngestionPolicy.FULL
-        if session_mode == SessionMode.INGEST:
-            return IngestionPolicy.FULL
-        if session_mode == SessionMode.RESEARCH:
-            return IngestionPolicy.FULL if len(doc.content()) > 1200 else IngestionPolicy.SUMMARY_ONLY
-        if doc.source_type == "live_web":
-            return IngestionPolicy.EPHEMERAL
-        if len(doc.content()) < 600:
-            return IngestionPolicy.FULL
-        return IngestionPolicy.SUMMARY_ONLY
+        # Determine namespace from source type
+        namespace = self._namespace_for_source_type(doc.source_type)
 
-    # Storage helpers ----------------------------------------------------
-    def _store_ephemeral(self, doc: SourceDocument, text: str) -> None:
-        chunks = self._chunk_text(text)
+        # Chunk the text
+        chunks = self._chunk_text(body)
+
+        # Add TTL metadata if ephemeral
+        metadata_overrides = {}
+        if ephemeral:
+            namespace = self.config.collections.web_cache
+            metadata_overrides["fetched_at"] = int(time.time())
+
+        # Store chunks
         self._upsert_chunks(
-            namespace=self.config.collections.web_cache,
+            namespace=namespace,
             doc=doc,
             chunks=chunks,
-            metadata_overrides={"fetched_at": int(time.time())},
-        )
-
-    def _store_full(self, doc: SourceDocument, text: str) -> None:
-        namespace = self._namespace_for(doc)
-        chunks = self._chunk_text(text)
-        self._upsert_chunks(namespace=namespace, doc=doc, chunks=chunks)
-        summary = self._summarize(text, doc)
-        if summary:
-            self._store_summary(doc, summary)
-
-    def _store_summary(self, doc: SourceDocument, summary: str) -> None:
-        namespace = self.config.collections.notes
-        embeddings = self.embedder([summary])
-        if not embeddings:
-            return
-        vectors = np.array(embeddings, dtype=float)
-        metadata = self._base_metadata(doc)
-        metadata.update({"kind": "summary"})
-        self.vector_store.add(
-            namespace=namespace,
-            texts=[summary],
-            embeddings=vectors,
-            metadatas=[metadata],
-            ids=[self._chunk_id(doc, "summary")],
+            metadata_overrides=metadata_overrides,
         )
 
     def _upsert_chunks(
@@ -218,33 +155,32 @@ class IngestionManager:
     def _chunk_id(self, doc: SourceDocument, suffix: Any) -> str:
         return f"{doc.id}:{suffix}:{uuid4().hex[:8]}"
 
-    def _namespace_for(self, doc: SourceDocument) -> str:
-        level = self._trust_level_for_doc(doc)
-        source_type = (doc.source_type or "").lower()
+    def _namespace_for_source_type(self, source_type: str) -> str:
+        """Map source type directly to namespace (content-type based).
+
+        This implements the observation-first model: content goes to the
+        namespace matching where it came from, not based on trust level.
+        """
+        source_type = (source_type or "").lower()
+
+        # YouTube content → youtube_history
         if source_type.startswith("youtube"):
             return self.config.collections.youtube
-        if level is TrustLevel.PERSONAL_HIGH:
-            return self.config.collections.notes
-        if level is TrustLevel.TOOL_OUTPUT:
-            return self.config.collections.web_cache
-        return self.config.collections.web_articles
 
-    def _summarize(self, text: str, doc: SourceDocument) -> Optional[str]:
-        prompt = (
-            "You are Argo's summarizer. Provide a concise, factual summary of the provided document. "
-            "Keep it under 4 sentences."
-        )
-        user = f"Title: {doc.title or 'n/a'}\nURL: {doc.url or 'n/a'}\n\n{text[:4000]}"
-        messages = [
-            ChatMessage(role="system", content=prompt),
-            ChatMessage(role="user", content=user),
-        ]
-        try:
-            summary = self.llm_client.chat(messages, temperature=0.2, max_tokens=256)
-        except Exception:  # noqa: BLE001 - summarization best-effort
-            return None
-        cleaned = (summary or "").strip()
-        return cleaned or None
+        # High-trust personal content → notes_journal
+        if source_type in ("note", "journal", "explicit_save", "research_memo"):
+            return self.config.collections.notes
+
+        # Browser history, web pages, articles → reading_history
+        if source_type in ("browser_history", "web_page", "article", "web_article"):
+            return self.config.collections.web_articles
+
+        # Tool outputs during research → web_cache (though ephemeral flag usually handles this)
+        if source_type in ("tool_output", "tool_cache"):
+            return self.config.collections.web_cache
+
+        # Default: reading history (for observation-first model)
+        return self.config.collections.web_articles
 
 
 _DEFAULT_MANAGER: Optional[IngestionManager] = None
@@ -259,4 +195,4 @@ def get_default_ingestion_manager() -> IngestionManager:
     return _DEFAULT_MANAGER
 
 
-__all__ = ["IngestionManager", "IngestionPolicy", "get_default_ingestion_manager"]
+__all__ = ["IngestionManager", "get_default_ingestion_manager"]

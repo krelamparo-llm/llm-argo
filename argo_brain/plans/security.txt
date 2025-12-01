@@ -1,3 +1,4 @@
+20251130: 
 1. Big principles for Argo
 
 Concrete design rules you can bake into your architecture:

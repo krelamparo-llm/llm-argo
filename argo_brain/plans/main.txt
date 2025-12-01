@@ -1,0 +1,617 @@
+Argo is your house-sized personal librarian jammed into a single desktop. Let’s pin down what it is and what it’s aiming to be.
+
+I’ll break it into:
+
+Goal / mental model
+
+Ideal (planned) architecture
+
+Current state (what actually exists today)
+
+How it all fits the “reads what I read, watches what I watch” goal
+
+1. Goal / Mental Model
+
+High-level goal:
+Argo should continuously observe your digital life—web pages you read, videos you watch, things you explicitly save—turn those into structured “memories” (embeddings + metadata + text), and then let a local LLM answer questions grounded in that personal corpus.
+
+So conceptually:
+
+Sensors: pick up what you read/watch.
+
+Ingestors: clean + chunk + embed that content.
+
+Memory store: persistent vector DB + some “autobiographical” metadata store.
+
+Brain: a local LLM (Qwen3 via llama.cpp) that:
+
+retrieves relevant memories via RAG, and
+
+can also browse the web in a Deep-Research style loop (planned).
+
+Everything sits on Argo, your desktop with a big GPU and a lot of RAM, and stays local.
+
+2. Ideal / Planned Architecture
+
+Think of the planned Argo stack in four layers:
+
+Hardware & OS
+
+LLM Engine & Serving
+
+Memory & Ingestion (Argo Brain)
+
+Orchestration, Tools, and Interfaces
+
+2.1 Hardware & OS (Execution Substrate)
+
+Machine: Argo
+
+RTX 5090
+
+Ryzen 9950X
+
+96 GB DDR5 6000
+
+Drives:
+
+C: – Windows OS
+
+D: – Models + vector DBs + data for Argo
+
+Linux NVMe – for bare-metal Linux experiments (parked for now)
+
+OS strategy (ideal):
+
+Windows as the primary interactive environment (your daily driver, editor, remote desktop target).
+
+WSL2 Ubuntu as the “LLM services & data” sandbox: Python scripts, vector DB, ingestion pipelines, and the local LLM server.
+
+Data paths (idealized):
+
+D:\llm\models\... – GGUF models and other model artifacts.
+
+D:\llm\data\... – ingested docs, temporary files.
+
+D:\llm\chroma\... – Chroma DB backing files.
+
+In WSL this is /mnt/d/llm/....
+
+2.2 LLM Engine & Serving
+
+LLM core:
+
+You’re using llama.cpp with CUDA support to run local models, currently Qwen-3-32B in GGUF format.
+
+This runs either via:
+
+llama-cli for ad-hoc CLI experiments, or
+
+llama-server (ideal) as an HTTP endpoint for the Argo Brain to call.
+
+Model choices (planned behavior):
+
+Primary general assistant:
+
+Qwen3-32B (or similar ~30–70B class) quantized to fit almost entirely in VRAM.
+
+Specialist or lighter models (possible later):
+
+Smaller GGUF models for quick tools (classification, routing, etc.).
+
+Context strategy:
+
+Weights mostly in VRAM.
+
+Large context window leveraging your huge system RAM as needed (trade latency for capacity, which is fine for text).
+
+Serving model (ideal):
+
+llama-server runs on Argo, exposing:
+
+/completion or /v1/chat/completions style endpoint.
+
+Argo Brain (Python) calls the server with:
+
+System prompt (tooling + memory instructions).
+
+Conversation history.
+
+Retrieved RAG context.
+
+Responses stream back to the chat UI / CLI.
+
+So the LLM itself is just a stateless function from prompt → tokens. All “memory”, “tools”, and “deep research” live outside, orchestrated by Argo Brain.
+
+2.3 Memory & Ingestion – “Argo Brain”
+
+This is the heart of the project.
+
+Key components (planned design):
+
+vector_store/ (Chroma abstraction)
+
+rag.py
+
+memory/manager.py
+
+CLI tools: scripts/youtube_ingest.py, scripts/web_ingest.py, etc.
+
+Tool wrappers: tools/web.py, tools/memory.py, etc.
+
+2.3.1 Vector Store (Chroma)
+
+Backend: Chroma’s PersistentClient.
+
+Location: on D: (in WSL /mnt/d), so it survives OS reinstalls and is shared across experiments.
+
+Abstraction: get_vector_store() returns a handle to the appropriate collection, hidden behind an interface so you can swap Chroma for another DB later.
+
+Namespaces / Collections (ideal):
+
+Think of each as a separate “shelf” of your memory:
+
+reading_history – pages you’ve read (browser history + HTML snapshots / cleaned text).
+
+youtube_history – videos you’ve watched, stored as transcripts + metadata.
+
+web_cache – content fetched during LLM web browsing (deep research).
+
+notes_journal – explicit notes, diaries, uploaded docs.
+
+autobiographical – distilled facts about you (“Where do I live”, “What workstation specs”, etc.).
+
+Possibly others: code repos, PDFs, work docs, etc.
+
+Each vector DB entry has:
+
+Text chunk (a paragraph or so).
+
+Embedding vector.
+
+Metadata: URL, title, timestamps, source type, maybe tags, etc.
+
+2.3.2 RAG Layer – rag.py
+
+rag.py owns all ingestion and retrieval logic:
+
+Ingestion:
+
+ingest_text(text, metadata, namespace=...):
+
+Cleans and chunks long text.
+
+Embeds each chunk.
+
+Writes to the correct Chroma collection.
+
+Used by:
+
+Web ingestor (articles, pages).
+
+YouTube ingestor (transcripts).
+
+Manual ingestion scripts (notes, PDFs).
+
+Retrieval:
+
+retrieve_knowledge(query, namespaces=[...], k=...):
+
+Embeds the query.
+
+Runs vector search in one or more namespaces.
+
+Returns scored chunks + metadata (a RetrievedChunks object) ready to be stuffed into the LLM context.
+
+This is the generic “RAG engine” that everything else sits on.
+
+2.3.3 Memory Manager – memory/manager.py
+
+This layer decides what kind of memory to use and when.
+
+Roles (ideal):
+
+Knows about memory namespaces and retention policies:
+
+Long-term autobiographical facts stick around.
+
+Web cache may be evicted / decayed.
+
+Decides which namespaces to query given a user question. Example:
+
+“What did that article on Mendocino rail bikes say…?” → reading_history.
+
+“What was the YouTube video I watched about undervolting the 5090?” → youtube_history.
+
+Writes back new memories when:
+
+A conversation reveals a stable fact (“My partner likes X”, “Argo has 96GB RAM”).
+
+Tools bring in novel web content that should be saved.
+
+It also exposes thin tool APIs:
+
+tools/memory.py lets the LLM use “memory tools” to:
+
+Retrieve from memory.
+
+Write new memory entries explicitly.
+
+2.3.4 Ingestion Pipelines (ideal)
+
+A. Browsing ingestion
+
+Goal: “Reads what I read.”
+
+A process that monitors your browser history (e.g., Chrome/Edge).
+
+For each new/interesting URL:
+
+Fetches the HTML.
+
+Strips boilerplate (nav, ads).
+
+Extracts main article text + title.
+
+Calls rag.ingest_text(..., namespace="reading_history").
+
+Over time, this builds a private archive of everything meaningful you read.
+
+B. YouTube / video ingestion
+
+Goal: “Watches what I watch.”
+
+A script that:
+
+Reads your YouTube watch history (export/API/manual feed).
+
+Fetches the transcript (or uses a speech-to-text pipeline).
+
+Stores transcript chunks + metadata (title, channel, watch time) into youtube_history.
+
+C. Explicit ingestion
+
+CLI or UI where you can:
+
+Drop a PDF, Markdown, or text file.
+
+Paste text or notes.
+
+Tag it (e.g., “work”, “personal”, “paper”).
+
+Store it in the appropriate namespace.
+
+This is your “manual override” when you really want something in Argo’s brain.
+
+2.4 Orchestration, Tools & Interfaces
+2.4.1 Tooling / “Deep Research” (planned)
+
+For internet-enabled answers, the planned behavior is:
+
+Argo LLM is given tools like:
+
+web_search(query) – search engine API wrapper.
+
+web_fetch(url) – fetch a URL and return text.
+
+memory_retrieve(query, namespaces=...) – call into Chroma via RAG.
+
+memory_store(text, namespace, metadata) – store new info.
+
+The “Deep research” loop:
+
+Break the user question into sub-questions.
+
+Search the web.
+
+Fetch and read pages.
+
+Summarize + write internal notes.
+
+Store those notes to web_cache or a research namespace.
+
+Finally synthesize an answer, grounded in both your personal memory and the live web.
+
+So Argo ends up as a research assistant that knows your entire digital footprint and can still look outside when needed.
+
+2.4.2 Interfaces & Access
+
+Planned access patterns:
+
+Local chat UI:
+
+Simple console or web UI on localhost that talks to the orchestrator.
+
+Remote access:
+
+Via Tailscale + RDP/VScode/SSH, you can use Argo from your laptop / iPad, but all data stays on the desktop.
+
+Public / semi-public endpoint (future):
+
+A web endpoint with two “modes”:
+
+Authenticated: full access to your personal context.
+
+Anonymous: sandboxed environment, no personal context, maybe a smaller model or limited tools.
+
+Extra app-layer security to prevent prompt injection / weird queries from messing with your memory or filesystem.
+
+3. Current State (as of late 2025)
+
+Now the honest part: what’s reality vs plan?
+
+3.1 Hardware & OS
+
+Already done:
+
+Argo is fully built and stable:
+
+5090 + 9950X + 96GB RAM.
+
+Windows installed on C:, extra D: drive set up for models/data.
+
+Monitoring and power:
+
+Core driver stack, GPU tools, CPU & GPU undervolting / fan curves, monitoring software are installed.
+
+Remote access:
+
+Tailscale, RDP, VS Code Remote Tunnel, OpenSSH, Termius all working.
+
+WSL2:
+
+Ubuntu installed in WSL; used as a dev environment for Python + llama.cpp builds and data work.
+
+Separate bare-metal Linux on third drive:
+
+Exists but WiFi drivers for your Mediatek card are missing, so you’ve parked it. Not in the critical path right now.
+
+3.2 LLM Engine
+
+Completed / working:
+
+llama.cpp compiled with CUDA on Argo (Windows, and also in WSL).
+
+You’ve:
+
+Downloaded and run models like:
+
+Gemma-3 1B-it (GGUF).
+
+Qwen3-32B quantized (Q4_K_M) as your main general model.
+
+Run llama-cli with:
+
+-ngl 999 (offload as many layers as possible to GPU).
+
+Context sizes like --ctx-size 8192.
+
+Observed GPU and CPU utilization via nvidia-smi and Windows tools.
+
+Partially done / in-progress:
+
+llama-server:
+
+You have the pieces to run it, and Argo Brain is conceptually built around calling a local llama-server. At least one test chat “went through to the server”.
+
+The “final” fully-wrapped, production-ish server that handles multiple tools, sessions, etc., is still evolving.
+
+3.3 Memory & RAG (Argo Brain)
+
+From the current README and our prior work:
+
+There is an Argo Brain Python project with:
+
+A Chroma-backed vector store on /mnt/d (i.e., D:).
+
+rag.py handling chunking, embeddings, and query-time retrieval.
+
+memory/manager.py using:
+
+The vector store for autobiographical memories.
+
+rag.retrieve_knowledge / ingest_web_result for other namespaces.
+
+Tools:
+
+tools/web.py wraps web fetching + ingestion.
+
+tools/memory.py wraps memory retrieval / storage.
+
+CLI scripts like scripts/youtube_ingest.py and web/article ingestion scripts that call rag.ingest_text.
+
+What’s working now:
+
+The vector DB is persistent and lives on D: (via /mnt/d in WSL).
+
+Ingestion and retrieval pipelines exist in code:
+
+You can manually call ingestion scripts to put content into Chroma.
+
+You can call retrieval code to see RAG results, and those can be fed into the LLM.
+
+Autobiographical memory:
+
+There is logic to store and retrieve “facts about you / Argo” in a dedicated namespace.
+
+You’ve successfully:
+
+Started the chat frontend.
+
+Sent messages through to the server.
+
+Asked about:
+
+How to test memory.
+
+Persistence across sessions.
+
+Behavior when servers restart.
+
+How to inspect DB contents.
+
+What’s still in flux:
+
+Fully automated browser history ingestion is still a design target rather than a fully wired, always-on daemon.
+
+YouTube ingestion is implemented as scripts, not necessarily fully integrated into an automated “watch history → memory” pipeline.
+
+The memory manager is mid-refactor:
+
+Namespaces and retention hints are being formalized in config.py.
+
+Some of the higher-level decay / retention policy logic is conceptual rather than battle-tested.
+
+3.4 Internet / Deep Research
+
+Where we are:
+
+You’ve explicitly kicked off a project to add internet browsing and deep research capabilities:
+
+We’ve surveyed patterns used by other local-LLM setups (search, browse, summarize, cache, repeat).
+
+We’ve discussed integrating tools like web_search, web_fetch, and storing web results in a web_cache namespace.
+
+We’ve also discussed the security implications (prompt injection, malicious HTML/SQL-ish payloads, app-layer protection).
+
+Not yet fully done:
+
+A robust Deep-Research agent loop that:
+
+Plans multi-step queries.
+
+Iteratively searches, reads, and summarizes.
+
+Writes results into long-term research memory.
+
+Hardened app-layer security rules in your Argo server (this is something you just kicked off with Codex prompts).
+
+3.5 Interfaces & Access
+
+Current:
+
+A working chat interface that:
+
+Sends user messages.
+
+Forwards them to the LLM server.
+
+Returns answers.
+
+Remote access:
+
+You can reach Argo from other devices via RDP, VS Code, SSH, etc., and type into the chat / run scripts.
+
+No fully polished web UI yet, but the foundations (LLM server + Python orchestrator) are there.
+
+Planned:
+
+A more polished, browser-based chat front-end.
+
+A split:
+
+Authenticated vs anonymous endpoint with different degrees of access to memory.
+
+4. How This All Serves the Goal
+
+Let’s trace the life of a piece of information in ideal Argo.
+
+Scenario 1: Reading an article
+
+You read a long article about, say, Deep Research architectures.
+
+Browsing ingestor:
+
+Notices the URL in your history.
+
+Fetches the HTML, extracts the main text.
+
+Calls ingest_text(..., namespace="reading_history").
+
+Chroma:
+
+Stores chunks of the article with title, URL, timestamp.
+
+Later you ask:
+
+“What did that article about Deep Research say about prompt injection defenses?”
+
+Argo Brain:
+
+Calls retrieve_knowledge on reading_history.
+
+Gets back the relevant passages.
+
+LLM:
+
+Receives:
+
+Your question.
+
+The retrieved chunks as context.
+
+Instructions about citing and consolidating.
+
+Answers with a summary grounded in that specific article.
+
+Result: Argo “remembers” what you read and can talk about it.
+
+Scenario 2: Watching a YouTube video
+
+You watch a video on undervolting the 5090 for better efficiency.
+
+YouTube ingestor:
+
+Grabs the transcript.
+
+Stores it in youtube_history with video title, channel, etc.
+
+Later you ask:
+
+“What were the recommended undervolt settings from that video I watched?”
+
+The same RAG pipeline kicks in, but over youtube_history.
+
+Result: Argo “remembers” what you watched and can summarize it.
+
+Scenario 3: Mixed with web browsing & Deep Research (planned)
+
+You ask something heavily external, like:
+
+“How do people structure long-term RAG memory for personal knowledge bases, and given my setup, what’s a good retention policy?”
+
+Argo:
+
+Fetches your own notes (notes_journal, reading_history).
+
+Uses web_search to find external best practices.
+
+Reads, summarizes, and caches external content in web_cache.
+
+Then synthesizes:
+
+What others do.
+
+How that intersects with your specific machine and data.
+
+It may decide to store its own synthesized “research memo” back into memory.
+
+Result: Argo becomes a self-improving personal researcher, not just a static QA bot.
+
+So, in short:
+
+Ideal Argo = local LLM + persistent, namespaced memory + continuous ingestion of your digital life + Deep-Research style web tools, all running on your own hardware and accessible remotely but privately.
+
+Current Argo has:
+
+Fully built hardware and base OS.
+
+Working local LLMs (Qwen3, etc.) via llama.cpp.
+
+A functioning Chroma-backed RAG + memory layer (Argo Brain) with autobiographical and document ingestion.
+
+A basic chat interface wired to the local LLM server.
+
+Early design and partial implementation for browser/YouTube ingestion and deep-research web tools, plus planned app-layer security.
+
+From here, the next increments are mostly wiring & hardening: turn the ingestion scripts into reliable background services, solidify memory namespaces and retention policies, and complete the Deep-Research + security pass so Argo can roam the web safely while staying anchored in your own history.
