@@ -150,13 +150,30 @@ class MemoryConfig:
 
 @dataclass(frozen=True)
 class LLMConfig:
-    """Configuration for llama-server interactions."""
+    """Configuration for llama-server interactions.
+
+    Best practices from Qwen3-Coder-30B:
+    - temperature: 0.7 for balanced creativity/accuracy
+    - top_p: 0.8 for nucleus sampling
+    - top_k: 20 for limited vocabulary
+    - repetition_penalty: 1.05 to reduce repetition
+    - max_tokens: 65536 for comprehensive responses
+    """
 
     base_url: str = DEFAULT_LLAMA_URL
     model: str = DEFAULT_LLAMA_MODEL
-    temperature: float = float(os.environ.get("ARGO_LLM_TEMPERATURE", 0.2))
-    max_tokens: int = int(os.environ.get("ARGO_LLM_MAX_TOKENS", 512))
+    temperature: float = float(os.environ.get("ARGO_LLM_TEMPERATURE", 0.7))
+    max_tokens: int = int(os.environ.get("ARGO_LLM_MAX_TOKENS", 2048))
     request_timeout: int = int(os.environ.get("ARGO_LLM_TIMEOUT", 180))
+
+    # Advanced sampling parameters (Qwen3-Coder best practices)
+    top_p: float = float(os.environ.get("ARGO_LLM_TOP_P", 0.8))
+    top_k: int = int(os.environ.get("ARGO_LLM_TOP_K", 20))
+    repetition_penalty: float = float(os.environ.get("ARGO_LLM_REPETITION_PENALTY", 1.05))
+
+    # Model-specific settings
+    use_chat_template: bool = bool(int(os.environ.get("ARGO_LLM_USE_CHAT_TEMPLATE", "0")))
+    tokenizer_path: Optional[str] = os.environ.get("ARGO_LLM_TOKENIZER_PATH")
 
 
 @dataclass(frozen=True)

@@ -42,9 +42,25 @@ class LLMClient:
         *,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        top_p: Optional[float] = None,
+        top_k: Optional[int] = None,
+        repetition_penalty: Optional[float] = None,
         extra_payload: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Send a chat completion request and return the assistant content."""
+        """Send a chat completion request and return the assistant content.
+
+        Args:
+            messages: Chat messages to send
+            temperature: Sampling temperature (default from config: 0.7)
+            max_tokens: Maximum tokens to generate (default from config: 2048)
+            top_p: Nucleus sampling probability (default from config: 0.8)
+            top_k: Top-K sampling limit (default from config: 20)
+            repetition_penalty: Penalty for repetition (default from config: 1.05)
+            extra_payload: Additional parameters to send
+
+        Returns:
+            Assistant response text
+        """
 
         payload: Dict[str, Any] = {
             "model": self.config.model,
@@ -52,6 +68,23 @@ class LLMClient:
             "max_tokens": max_tokens if max_tokens is not None else self.config.max_tokens,
             "messages": [message.__dict__ for message in messages],
         }
+
+        # Add advanced sampling parameters (Qwen3-Coder best practices)
+        if top_p is not None:
+            payload["top_p"] = top_p
+        elif hasattr(self.config, "top_p"):
+            payload["top_p"] = self.config.top_p
+
+        if top_k is not None:
+            payload["top_k"] = top_k
+        elif hasattr(self.config, "top_k"):
+            payload["top_k"] = self.config.top_k
+
+        if repetition_penalty is not None:
+            payload["repetition_penalty"] = repetition_penalty
+        elif hasattr(self.config, "repetition_penalty"):
+            payload["repetition_penalty"] = self.config.repetition_penalty
+
         if extra_payload:
             payload.update(extra_payload)
 

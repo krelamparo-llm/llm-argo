@@ -11,3 +11,16 @@ path = "/home/krela/.argo_data/vectordb"
 [llm]
 base_url = "http://127.0.0.1:8080/v1/chat/completions"
 model = "local-llm"
+
+# Best practices from Qwen3-Coder-30B model documentation
+# These parameters optimize for balanced creativity and accuracy
+temperature = 0.7              # Higher than default for more creative responses
+top_p = 0.8                    # Nucleus sampling probability
+top_k = 20                     # Limit vocabulary to top 20 tokens
+repetition_penalty = 1.05      # Reduce repetition in output
+max_tokens = 2048              # Increased from 512 for longer responses
+
+# Tokenizer configuration (optional)
+# Set to enable HuggingFace transformers integration
+# use_chat_template = 0
+# tokenizer_path = "/mnt/d/llm/models/qwen3-coder-30b"
