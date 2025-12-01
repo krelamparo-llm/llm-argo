@@ -31,13 +31,13 @@ class ToolTracker:
         result: ToolResult,
     ) -> None:
         """Persist tool execution to audit log."""
-        metadata_str = str(result.metadata) if result.metadata else None
+        input_payload = request.query
+        output_ref = result.summary[:200] if result.summary else None
         self.db.log_tool_run(
             session_id=session_id,
-            tool_name=request.tool_name,
-            query=request.query,
-            summary=result.summary,
-            metadata=metadata_str,
+            tool_name=result.tool_name,
+            input_payload=input_payload,
+            output_ref=output_ref,
         )
 
     def process_result(
@@ -58,14 +58,14 @@ class ToolTracker:
         self.log_tool_run(session_id, request, result)
 
         # Cache web results if applicable
-        if request.tool_name == "web_access" and result.content:
+        if result.tool_name == "web_access" and result.content:
             self._cache_web_content(result)
 
         # Future: Cache search results, memory query results, etc.
 
     def recent_runs(self, session_id: str, limit: int = 10) -> List[ToolRunRecord]:
         """Retrieve recent tool executions."""
-        return self.db.get_recent_tool_runs(session_id, limit)
+        return self.db.recent_tool_runs(session_id, limit)
 
     def _cache_web_content(self, result: ToolResult) -> None:
         """Store web fetch result in ephemeral cache."""

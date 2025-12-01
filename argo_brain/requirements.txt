@@ -5,3 +5,4 @@ youtube-transcript-api
 requests
 tomli
 numpy
+ddgs

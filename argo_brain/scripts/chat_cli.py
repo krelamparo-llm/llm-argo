@@ -48,7 +48,7 @@ def _print_tools(assistant: ArgoAssistant) -> None:
 
 
 def _print_tool_runs(assistant: ArgoAssistant, session_id: str) -> None:
-    runs = assistant.memory_manager.recent_tool_runs(session_id, limit=5)
+    runs = assistant.tool_tracker.recent_runs(session_id, limit=5)
     if not runs:
         print("No tool runs logged for this session yet.")
         return
@@ -130,6 +130,8 @@ def chat_loop(
     assistant = ArgoAssistant(
         llm_client=runtime.llm_client,
         memory_manager=runtime.memory_manager,
+        session_manager=runtime.session_manager,
+        tool_tracker=runtime.tool_tracker,
         default_session_mode=mode,
         ingestion_manager=runtime.ingestion_manager,
     )
@@ -165,7 +167,7 @@ def chat_loop(
                 continue
             if cmd == ":summary":
                 logger.debug("Showing session summary", extra={"session_id": session_id})
-                summary = assistant.memory_manager.get_session_summary(session_id)
+                summary = assistant.session_manager.get_session_summary(session_id)
                 print(summary or "No summary yet.")
                 continue
             if cmd == ":webcache":

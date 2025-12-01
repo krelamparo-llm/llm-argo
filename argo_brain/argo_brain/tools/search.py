@@ -120,11 +120,15 @@ class WebSearchTool:
     def _search_duckduckgo(self, query: str, max_results: int) -> List[Dict[str, str]]:
         """Use DuckDuckGo HTML scraping (no API key needed)."""
         try:
-            from duckduckgo_search import DDGS
-        except ImportError as e:
-            raise ToolExecutionError(
-                "duckduckgo_search not installed. Run: pip install duckduckgo-search"
-            ) from e
+            from ddgs import DDGS
+        except ImportError:
+            # Fallback to old package name for backward compatibility
+            try:
+                from duckduckgo_search import DDGS
+            except ImportError as e:
+                raise ToolExecutionError(
+                    "ddgs not installed. Run: pip install ddgs"
+                ) from e
 
         try:
             with DDGS() as ddgs:

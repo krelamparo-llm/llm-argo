@@ -157,6 +157,29 @@ class MemoryDB:
             ).fetchone()
         return int(count)
 
+    def count_messages_since_summary(self, session_id: str) -> int:
+        """Count messages added since last summary update."""
+        with self._connect() as conn:
+            # Get timestamp of last summary update
+            summary_row = conn.execute(
+                "SELECT updated_at FROM session_summaries WHERE session_id = ?",
+                (session_id,),
+            ).fetchone()
+
+            if not summary_row:
+                # No summary yet, count all messages
+                return self.count_messages(session_id)
+
+            summary_time = summary_row[0]
+            (count,) = conn.execute(
+                """
+                SELECT COUNT(*) FROM messages
+                WHERE session_id = ? AND created_at > ?
+                """,
+                (session_id, summary_time),
+            ).fetchone()
+            return int(count)
+
     def get_session_summary(self, session_id: str) -> Optional[str]:
         with self._connect() as conn:
             row = conn.execute(
@@ -178,6 +201,10 @@ class MemoryDB:
                 """,
                 (session_id, summary_text),
             )
+
+    def update_session_summary(self, session_id: str, summary_text: str) -> None:
+        """Alias for upsert_session_summary for backward compatibility."""
+        self.upsert_session_summary(session_id, summary_text)
 
     def add_profile_fact(
         self,

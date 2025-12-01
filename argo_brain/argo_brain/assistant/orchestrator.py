@@ -13,7 +13,10 @@ from ..llm_client import ChatMessage, LLMClient
 from ..core.memory.ingestion import IngestionManager
 from ..core.memory.session import SessionMode
 from ..memory.manager import MemoryContext, MemoryManager
+from ..memory.session_manager import SessionManager
+from ..memory.tool_tracker import ToolTracker
 from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool
+from ..tools.search import WebSearchTool
 from ..tools.base import Tool, ToolExecutionError, ToolRegistry, ToolRequest, ToolResult
 from ..utils.json_helpers import extract_json_object
 from .tool_policy import ProposedToolCall, ToolPolicy
@@ -43,13 +46,15 @@ class AssistantResponse:
 class ArgoAssistant:
     """High-level assistant that routes through the memory manager."""
 
-    MAX_TOOL_CALLS = 3
+    MAX_TOOL_CALLS = 10  # Increased from 3 for deep research
 
     def __init__(
         self,
         *,
         llm_client: Optional[LLMClient] = None,
         memory_manager: Optional[MemoryManager] = None,
+        session_manager: Optional[SessionManager] = None,
+        tool_tracker: Optional[ToolTracker] = None,
         system_prompt: Optional[str] = None,
         tools: Optional[List[Tool]] = None,
         tool_registry: Optional[ToolRegistry] = None,
@@ -59,7 +64,9 @@ class ArgoAssistant:
     ) -> None:
         self.llm_client = llm_client or LLMClient()
         self.memory_manager = memory_manager or MemoryManager(llm_client=self.llm_client)
-        self.ingestion_manager = ingestion_manager or getattr(self.memory_manager, "ingestion_manager")
+        self.session_manager = session_manager or SessionManager()
+        self.tool_tracker = tool_tracker or ToolTracker()
+        self.ingestion_manager = ingestion_manager or IngestionManager()
         self.system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self.config = CONFIG
         self.tool_registry = tool_registry or ToolRegistry()
@@ -68,6 +75,7 @@ class ArgoAssistant:
         self.logger = logging.getLogger("argo_brain.assistant")
         if tools is None:
             tools = [
+                WebSearchTool(),
                 WebAccessTool(ingestion_manager=self.ingestion_manager),
                 MemoryQueryTool(memory_manager=self.memory_manager),
                 MemoryWriteTool(ingestion_manager=self.ingestion_manager),
@@ -210,7 +218,7 @@ class ArgoAssistant:
         """Process a new user message and return the assistant output."""
 
         active_mode = session_mode or self.default_session_mode
-        self.memory_manager.ensure_session(session_id)
+        self.session_manager.ensure_session(session_id)
         self.logger.info(
             "User message received",
             extra={"session_id": session_id, "chars": len(user_message)},
@@ -317,8 +325,24 @@ class ArgoAssistant:
             break
 
         thought, final_text = self._split_think(response_text)
-        # Persist the cleaned final text so summaries/memories stay concise.
-        self.memory_manager.record_interaction(session_id, user_message, final_text)
+
+        # Record conversation turn via SessionManager
+        self.session_manager.record_turn(session_id, user_message, final_text)
+
+        # Extract and store memories via MemoryManager
+        recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+        self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+
+        # Track tool executions via ToolTracker
+        for result in tool_results_accum:
+            request = ToolRequest(
+                session_id=session_id,
+                query=user_message,
+                metadata=result.metadata or {},
+                session_mode=active_mode,
+            )
+            self.tool_tracker.process_result(session_id, request, result)
+
         self.logger.info(
             "Assistant completed response",
             extra={"session_id": session_id, "tool_runs": len(tool_results_accum)},
@@ -366,5 +390,5 @@ class ArgoAssistant:
             session_mode=session_mode,
         )
         result = tool.run(request)
-        self.memory_manager.process_tool_result(session_id, request, result)
+        self.tool_tracker.process_result(session_id, request, result)
         return result

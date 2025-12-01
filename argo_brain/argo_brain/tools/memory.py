@@ -8,7 +8,6 @@ from ..config import CONFIG
 from ..core.memory.document import SourceDocument
 from ..core.memory.ingestion import (
     IngestionManager,
-    IngestionPolicy,
     get_default_ingestion_manager,
 )
 from ..vector_store import Document
@@ -124,9 +123,10 @@ class MemoryWriteTool:
             "source_type": {"type": "string", "description": "Logical source label", "default": "conversation_note"},
             "source_id": {"type": "string", "description": "Unique identifier for the source"},
             "url": {"type": "string", "description": "Optional URL associated with the note"},
-            "policy": {
-                "type": "string",
-                "description": "Optional ingestion policy override (ephemeral|summary_only|full)",
+            "ephemeral": {
+                "type": "boolean",
+                "description": "If true, store as ephemeral content (auto-expires)",
+                "default": False,
             },
         },
         "required": ["text"],
@@ -150,13 +150,7 @@ class MemoryWriteTool:
         source_type = request.metadata.get("source_type", "note")
         source_id = request.metadata.get("source_id") or f"memory:{request.session_id}:{abs(hash(text))}"
         url = request.metadata.get("url")
-        policy_value = request.metadata.get("policy")
-        policy = None
-        if isinstance(policy_value, str):
-            try:
-                policy = IngestionPolicy(policy_value)
-            except ValueError:
-                policy = None
+        ephemeral = request.metadata.get("ephemeral", False)
         doc = SourceDocument(
             id=source_id,
             source_type=source_type,
@@ -165,13 +159,7 @@ class MemoryWriteTool:
             url=url,
             metadata={"session_id": request.session_id},
         )
-        intent = "explicit_save"
-        self.ingestion_manager.ingest_document(
-            doc,
-            session_mode=request.session_mode,
-            user_intent=intent,
-            policy_override=policy,
-        )
+        self.ingestion_manager.ingest_document(doc, ephemeral=ephemeral)
         summary = f"Stored note '{source_id}'"
         return ToolResult(
             tool_name=self.name,
