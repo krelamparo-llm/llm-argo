@@ -708,6 +708,16 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                     research_stats["plan_text"] = plan
                     self.logger.info("Research plan created", extra={"session_id": session_id, "plan_length": len(plan)})
 
+                    # If plan was created but no tool call in same response, prompt for tool execution
+                    if "<tool_call>" not in response_text.lower():
+                        prompt_for_tools = (
+                            "Good! You've created a research plan. Now IMMEDIATELY begin executing your first search.\n\n"
+                            "Output your FIRST tool call now (no other text)."
+                        )
+                        extra_messages.append(ChatMessage(role="system", content=prompt_for_tools))
+                        self.logger.info("Prompting for tool execution after plan", extra={"session_id": session_id})
+                        continue  # Continue loop to get tool call
+
             plan_payload = self._maybe_parse_plan(response_text)
             if plan_payload:
                 proposals = plan_payload["proposals"]
