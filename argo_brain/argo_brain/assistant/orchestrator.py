@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 import logging
@@ -537,11 +538,12 @@ Continue researching until ALL stopping conditions are met. Resist premature con
 
         iterations = 0
         response_text = ""
-        # Research mode needs higher max_tokens for synthesis and detailed responses
-        max_tokens = 2048 if active_mode == SessionMode.RESEARCH else None
+        # Research mode needs higher max_tokens for synthesis with full citations and analysis
+        # 4096 tokens allows for: plan + multiple tool calls + synthesis + citations + confidence + gaps
+        max_tokens = 4096 if active_mode == SessionMode.RESEARCH else None
         # Use lower temperature for tool-calling to get focused, deterministic JSON
         # Increase temperature after getting tool results for more creative synthesis
-        temperature = 0.3  # Lower than config default of 0.7 for precise tool calls
+        temperature = 0.2  # Lower than config default of 0.7 for precise tool calls
 
         while True:
             prompt_messages = self.build_prompt(context, user_message, active_mode) + extra_messages
@@ -566,39 +568,36 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                 if rejections:
                     msg = json.dumps({"rejected": rejections}, ensure_ascii=False)
                     extra_messages.append(ChatMessage(role="system", content=f"POLICY_REJECTION {msg}"))
-                for proposal in approved:
+                # Execute tools (in parallel if multiple approved)
+                if len(approved) > 1:
+                    self.logger.info(
+                        f"Executing {len(approved)} tools in parallel",
+                        extra={"session_id": session_id, "tools": [p.tool for p in approved]}
+                    )
+                    results = self._execute_tools_parallel(
+                        approved[:self.MAX_TOOL_CALLS - iterations],
+                        session_id,
+                        user_message,
+                        active_mode
+                    )
+                else:
+                    # Single tool - execute normally
+                    results = [self._execute_single_tool(approved[0], session_id, user_message, active_mode)]
+
+                # Process results
+                for proposal, result in zip(approved, results):
                     if iterations >= self.MAX_TOOL_CALLS:
                         break
                     iterations += 1
-                    arguments = proposal.arguments or {}
-                    query_arg = (
-                        str(arguments.get("query"))
-                        if arguments.get("query") is not None
-                        else arguments.get("url")
-                    )
-                    query_value = query_arg or user_message
-                    self.logger.info(
-                        "Executing tool",
-                        extra={
-                            "session_id": session_id,
-                            "tool": proposal.tool,
-                            "args_keys": sorted(arguments.keys()),
-                        },
-                    )
-                    result = self.run_tool(
-                        proposal.tool,
-                        session_id,
-                        str(query_value),
-                        metadata=arguments,
-                        session_mode=active_mode,
-                    )
+
                     tool_results_accum.append(result)
 
                     # Track research progress
                     research_stats["tool_calls"] += 1
+                    arguments = proposal.arguments or {}
                     if proposal.tool == "web_search":
                         research_stats["searches"] += 1
-                        query = arguments.get("query", query_value)
+                        query = arguments.get("query", user_message)
                         research_stats["search_queries"].append(str(query))
                     elif proposal.tool == "web_access" and result.metadata:
                         url = result.metadata.get("url")
@@ -606,19 +605,24 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                             research_stats["unique_urls"].add(url)
                             research_stats["sources_fetched"] += 1
 
-                    context = self.memory_manager.get_context_for_prompt(
-                        session_id,
-                        user_message,
-                        tool_results=tool_results_accum,
-                    )
+                # Update context once with all results
+                context = self.memory_manager.get_context_for_prompt(
+                    session_id,
+                    user_message,
+                    tool_results=tool_results_accum,
+                )
+
+                # Add all tool call messages
+                for proposal in approved[:len(results)]:
+                    arguments = proposal.arguments or {}
                     call_json = json.dumps({"tool_name": proposal.tool, "arguments": arguments}, ensure_ascii=False)
                     extra_messages.append(ChatMessage(role="assistant", content=f"TOOL_CALL {call_json}"))
 
-                    # Add tool result with research progress feedback in RESEARCH mode
+                # Add all tool results
+                for result in results:
                     result_msg = self._format_tool_result_for_prompt(result)
                     if active_mode == SessionMode.RESEARCH:
                         result_msg += self._format_research_progress(research_stats)
-
                     extra_messages.append(ChatMessage(role="system", content=result_msg))
                 if approved:
                     continue
@@ -657,6 +661,35 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                     )
                 )
                 continue
+
+            # Research mode: trigger explicit synthesis after tool execution
+            if active_mode == SessionMode.RESEARCH and research_stats["tool_calls"] > 0:
+                # Check if we've already triggered synthesis
+                if not research_stats.get("synthesis_triggered"):
+                    research_stats["synthesis_triggered"] = True
+
+                    # Add explicit synthesis request
+                    synthesis_prompt = (
+                        "All research tools have been executed. You now have sufficient information to answer.\n\n"
+                        "CRITICAL: You MUST now provide your final synthesis following this EXACT structure:\n\n"
+                        "<synthesis>\n"
+                        "[Comprehensive answer to the research question, incorporating findings from all sources]\n"
+                        "[Use proper citations: cite sources as [1], [2], etc. matching the URLs from tool results]\n"
+                        "[Address all aspects of the original question]\n"
+                        "[Compare and contrast information from different sources if relevant]\n"
+                        "</synthesis>\n\n"
+                        "<confidence>0.0-1.0</confidence>\n\n"
+                        "<gaps>\n"
+                        "[List any limitations, uncertainties, or areas where more research would be needed]\n"
+                        "[Note: If no significant gaps, write \"None identified based on available sources\"]\n"
+                        "</gaps>\n\n"
+                        "DO NOT request more tools. DO NOT output tool calls. ONLY provide the synthesis structure above."
+                    )
+
+                    extra_messages.append(ChatMessage(role="system", content=synthesis_prompt))
+                    self.logger.info("Triggering synthesis phase after tool execution", extra={"session_id": session_id})
+                    continue  # One more LLM call for synthesis
+
             break
 
         thought, final_text = self._split_think(response_text)
@@ -703,6 +736,100 @@ Continue researching until ALL stopping conditions are met. Resist premature con
     # ---- Tool helpers ---------------------------------------------------
     def available_tools(self) -> List[Tool]:
         return self.tool_registry.list_tools()
+
+    def _execute_single_tool(
+        self,
+        proposal: ProposedToolCall,
+        session_id: str,
+        user_message: str,
+        active_mode: SessionMode
+    ) -> ToolResult:
+        """Execute a single tool call."""
+        arguments = proposal.arguments or {}
+        query_arg = (
+            str(arguments.get("query"))
+            if arguments.get("query") is not None
+            else arguments.get("url")
+        )
+        query_value = query_arg or user_message
+
+        self.logger.info(
+            "Executing tool",
+            extra={
+                "session_id": session_id,
+                "tool": proposal.tool,
+                "args_keys": sorted(arguments.keys()),
+            },
+        )
+
+        return self.run_tool(
+            proposal.tool,
+            session_id,
+            str(query_value),
+            metadata=arguments,
+            session_mode=active_mode,
+        )
+
+    def _execute_tools_parallel(
+        self,
+        proposals: List[ProposedToolCall],
+        session_id: str,
+        user_message: str,
+        active_mode: SessionMode,
+        max_workers: int = 3
+    ) -> List[ToolResult]:
+        """Execute multiple tools in parallel using ThreadPoolExecutor.
+
+        Args:
+            proposals: List of tool calls to execute
+            session_id: Current session ID
+            user_message: User's message (for fallback query)
+            active_mode: Session mode
+            max_workers: Maximum parallel workers (default 3)
+
+        Returns:
+            List of ToolResults in same order as proposals
+        """
+        results = [None] * len(proposals)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_index = {
+                executor.submit(
+                    self._execute_single_tool,
+                    proposal,
+                    session_id,
+                    user_message,
+                    active_mode
+                ): i
+                for i, proposal in enumerate(proposals)
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_index):
+                index = future_to_index[future]
+                try:
+                    results[index] = future.result()
+                except Exception as exc:
+                    self.logger.error(
+                        f"Tool execution failed",
+                        exc_info=True,
+                        extra={
+                            "session_id": session_id,
+                            "tool": proposals[index].tool,
+                            "error": str(exc)
+                        }
+                    )
+                    # Return error result
+                    results[index] = ToolResult(
+                        tool_name=proposals[index].tool,
+                        summary=f"Tool execution failed: {exc}",
+                        content="",
+                        error=f"Tool execution failed: {exc}",
+                        metadata={"tool": proposals[index].tool, "error": str(exc)}
+                    )
+
+        return results
 
     def run_tool(
         self,

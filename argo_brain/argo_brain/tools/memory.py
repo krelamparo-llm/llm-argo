@@ -33,10 +33,32 @@ class MemoryQueryTool:
     """Query the user's personal knowledge base via vector search."""
 
     name = "memory_query"
-    description = (
-        "Search Karl's personal knowledge base (articles, transcripts, history) "
-        "and return the most relevant snippets."
-    )
+    description = """Query Argo's long-term memory for previously stored information.
+
+**When to use**:
+- User asks about past conversations or research
+- Looking for information you previously ingested
+- Checking if a topic has been covered before
+- IMPORTANT: Query memory BEFORE web searches for topics that may have been researched before
+
+**Parameters**:
+- query (str): Natural language query describing what to find
+  Example: "machine learning projects from last month"
+  Example: "research on Python performance"
+  Example: "notes about LangChain agents"
+
+**Returns**: Relevant memory chunks with content and metadata (timestamps, sources, URLs)
+
+**Best practices**:
+- Query memory FIRST before doing web searches for potentially-researched topics
+- Use temporal terms when relevant ("last week", "recent", "yesterday")
+- Combine with web_search for updated information on evolving topics
+- Use specific terms matching how information was likely stored
+
+**Edge cases**:
+- Empty results mean topic hasn't been stored yet (proceed to web_search)
+- Queries must match semantic meaning, not exact phrasing
+- Very old information may have been archived/expired"""
     input_schema = {
         "type": "object",
         "properties": {
@@ -113,9 +135,32 @@ class MemoryWriteTool:
     """Persist summarized knowledge into the personal knowledge base."""
 
     name = "memory_write"
-    description = (
-        "Store concise summaries or notes into Karl's personal knowledge base for future retrieval."
-    )
+    description = """Store important information in Argo's long-term memory.
+
+**When to use**:
+- After completing substantial research
+- User explicitly asks to remember something
+- Storing structured notes for future retrieval
+- Archiving important findings or decisions
+
+**Parameters**:
+- text (str): The information to store (plain text or markdown)
+- source_type (str): Logical label (default: "conversation_note")
+- url (str, optional): URL associated with the note if applicable
+- ephemeral (bool): If true, auto-expires (default: false for permanent storage)
+
+**Returns**: Confirmation of storage with source_id
+
+**Best practices**:
+- Write clear, self-contained summaries (not raw tool outputs)
+- Include source URLs in content when relevant for attribution
+- Use markdown formatting for structure (headings, lists, code blocks)
+- Store synthesized insights, not just copy-pasted text
+
+**Edge cases**:
+- Duplicate content is deduplicated automatically
+- Very large content (>10K chars) may be chunked
+- Ephemeral content expires after ~7 days"""
     input_schema = {
         "type": "object",
         "properties": {

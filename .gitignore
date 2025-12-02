@@ -13,3 +13,6 @@ __pycache__/
 *.db
 *.db-journal
 *.db-*
+
+# ignore .argo_data/ directory
+.argo_data/

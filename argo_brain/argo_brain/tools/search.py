@@ -13,11 +13,32 @@ class WebSearchTool:
     """Performs web searches and returns URLs + snippets."""
 
     name = "web_search"
-    description = (
-        "Search the web for information. Returns URLs and text snippets. "
-        "Use this when you need to find information not in memory. "
-        "Example: web_search('RAG retention policies best practices')"
-    )
+    description = """Search the web for current information using DuckDuckGo.
+
+**When to use**:
+- Finding recent news, articles, or documentation
+- Discovering authoritative sources on a topic
+- Getting multiple perspectives on a question
+- First step in research before using web_access
+
+**Parameters**:
+- query (str): Natural language search query, 3-10 words recommended
+  Example: "machine learning best practices 2025"
+  Example: "Python asyncio tutorial"
+  Example: "Claude tool calling patterns"
+
+**Returns**: List of search results with titles, URLs, and snippets (max 10 results)
+
+**Best practices**:
+- Use specific, focused queries rather than broad terms
+- Include year for time-sensitive topics (e.g., "React hooks 2025")
+- Avoid overly long queries (>15 words become less effective)
+- Try different phrasings if first search doesn't yield good results
+
+**Edge cases**:
+- Very recent events (last 24 hours) may have limited results
+- Highly technical terms work better than colloquial language
+- Academic queries may benefit from adding "research" or "paper" to query"""
     input_schema = {
         "type": "object",
         "properties": {

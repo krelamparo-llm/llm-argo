@@ -21,11 +21,46 @@ class WebAccessTool:
     """Fetches a web page and returns extracted text for downstream use."""
 
     name = "web_access"
-    description = "Fetch a URL via HTTP(S) and extract readable text."
+    description = """Fetch and read the full content from a specific URL.
+
+**When to use**:
+- After web_search identifies a promising source
+- When you need the complete article/page content
+- To verify specific claims or details from search snippets
+- For deep analysis requiring full text
+
+**Parameters**:
+- url (str): Valid HTTP/HTTPS URL to fetch
+  Example: "https://docs.python.org/3/library/asyncio.html"
+- response_format (str, optional): "concise" or "detailed" (default: "concise")
+  - "concise": Returns 200-word summary + key facts (faster, fewer tokens)
+  - "detailed": Returns full article text (use for deep analysis)
+
+**Returns**:
+- Concise mode: Title, URL, summary, key facts, metadata
+- Detailed mode: Full article text with metadata
+
+**Best practices**:
+- Use "concise" mode first to evaluate relevance
+- Only use "detailed" mode when you need to cite specific passages
+- Prefer official documentation and primary sources over secondary
+- Check search snippets to confirm URL is worth fetching
+
+**Edge cases**:
+- Paywalled content may return partial text or fail
+- Dynamic JavaScript sites may have limited content
+- PDF links will attempt text extraction (may be slow)
+- Redirects are followed automatically"""
     input_schema = {
         "type": "object",
         "properties": {
             "url": {"type": "string", "description": "HTTP(S) URL to fetch"},
+            "response_format": {
+                "type": "string",
+                "description": "Response format: 'concise' (summary + key facts) or 'detailed' (full text)",
+                "enum": ["concise", "detailed"],
+                "default": "concise"
+            },
             "summary": {"type": "string", "description": "Optional summary to log with the result"},
         },
         "required": ["url"],
@@ -55,6 +90,7 @@ class WebAccessTool:
     def run(self, request: ToolRequest) -> ToolResult:
         url = request.metadata.get("url") or request.query
         url = self._validate_url(url)
+        response_format = request.metadata.get("response_format", "concise")
 
         try:
             response = requests.get(url, timeout=self.timeout, headers={"User-Agent": self.user_agent})
@@ -76,8 +112,15 @@ class WebAccessTool:
         final_url = self._validate_url(response.url)
 
         extracted = trafilatura.extract(response.text, include_comments=False, include_tables=False)
-        content = extracted or response.text[:4000]
-        summary = request.metadata.get("summary") or f"Retrieved {url}"
+        full_content = extracted or response.text[:4000]
+
+        # Handle response format
+        if response_format == "concise":
+            content = self._generate_concise_response(full_content, final_url)
+            summary = f"Retrieved concise summary from {url}"
+        else:  # detailed
+            content = full_content
+            summary = request.metadata.get("summary") or f"Retrieved full content from {url}"
 
         # Determine if this is ephemeral (deep research) or archival
         # For now, treat as ephemeral - future browser history daemon will use archival
@@ -92,6 +135,9 @@ class WebAccessTool:
             "trust_level": TrustLevel.WEB_UNTRUSTED.value,
             "http_status": response.status_code,
             "source_type": src_type,
+            "response_format": response_format,
+            "full_length": len(full_content),
+            "word_count": len(full_content.split()),
         }
         snippets = [content[:500]] if content else []
         doc = SourceDocument(
@@ -121,6 +167,71 @@ class WebAccessTool:
             metadata=metadata,
             snippets=snippets,
         )
+
+    def _generate_concise_response(self, content: str, url: str) -> str:
+        """Generate a concise summary of the content with key facts.
+
+        Returns a structured response with:
+        - Summary (first few paragraphs or ~200 words)
+        - Key Facts (bullet points from content)
+        """
+        if not content or len(content) < 100:
+            return content
+
+        # Extract first few paragraphs for summary
+        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+
+        # Summary: First 3 paragraphs or ~200 words, whichever is shorter
+        summary_paras = []
+        word_count = 0
+        for para in paragraphs[:5]:
+            words_in_para = len(para.split())
+            if word_count + words_in_para > 250:
+                # Truncate this paragraph to hit ~200 words
+                remaining_words = 250 - word_count
+                truncated = ' '.join(para.split()[:remaining_words]) + "..."
+                summary_paras.append(truncated)
+                break
+            summary_paras.append(para)
+            word_count += words_in_para
+            if word_count >= 200:
+                break
+
+        summary = '\n\n'.join(summary_paras)
+
+        # Extract key facts: look for lists, numbered items, or sentences with numbers/dates
+        key_facts = []
+        for para in paragraphs:
+            # Detect bullet points or numbered lists
+            if any(para.strip().startswith(marker) for marker in ['•', '-', '*', '1.', '2.', '3.']):
+                items = [line.strip() for line in para.split('\n') if line.strip()]
+                key_facts.extend(items[:3])  # Take first 3 items
+                if len(key_facts) >= 5:
+                    break
+            # Detect sentences with numbers, dates, or percentages
+            elif any(indicator in para for indicator in ['%', '20', '$', 'million', 'billion']):
+                sentences = para.split('. ')
+                for sent in sentences[:2]:
+                    if any(char.isdigit() for char in sent):
+                        key_facts.append(sent.strip())
+                        if len(key_facts) >= 5:
+                            break
+
+        # Format the response
+        result = f"**Summary**:\n{summary}\n\n"
+
+        if key_facts:
+            result += "**Key Facts**:\n"
+            for fact in key_facts[:5]:  # Limit to 5 key facts
+                # Clean up fact formatting
+                clean_fact = fact.lstrip('•-*123456789. ').strip()
+                if clean_fact:
+                    result += f"• {clean_fact}\n"
+
+        result += f"\n**Full article available at**: {url}\n"
+        result += f"**Note**: Use response_format='detailed' to get full text for deep analysis.\n"
+
+        return result
 
     def _validate_url(self, url: Optional[str]) -> str:
         if not url:
