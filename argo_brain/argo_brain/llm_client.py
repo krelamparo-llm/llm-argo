@@ -116,19 +116,40 @@ class LLMClient:
             self.logger.error(msg, exc_info=True)
             raise RuntimeError(msg) from exc
         elapsed = time.perf_counter() - start
+
+        if response.status_code != 200:
+            self.logger.error(
+                "LLM request failed",
+                extra={
+                    "status_code": response.status_code,
+                    "elapsed_ms": round(elapsed * 1000, 2),
+                }
+            )
+            raise RuntimeError(
+                f"llama-server returned {response.status_code}: {response.text[:2000]}"
+            )
+
+        data = response.json()
+
+        # Extract token usage from llama-server response
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+
+        # Log completion with token counts
         self.logger.info(
             "LLM request completed",
             extra={
                 "status_code": response.status_code,
                 "elapsed_ms": round(elapsed * 1000, 2),
                 "tokens_max": payload.get("max_tokens"),
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
             },
         )
-        if response.status_code != 200:
-            raise RuntimeError(
-                f"llama-server returned {response.status_code}: {response.text[:2000]}"
-            )
-        data = response.json()
+
         try:
             return data["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError) as exc:

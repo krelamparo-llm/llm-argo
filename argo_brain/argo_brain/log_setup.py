@@ -27,13 +27,22 @@ def setup_logging(level: str | int = "INFO") -> logging.Logger:
     logger = logging.getLogger("argo_brain")
     logger.setLevel(level if isinstance(level, int) else getattr(logging, str(level).upper(), logging.INFO))
 
-    # Custom formatter that includes extra fields like elapsed_ms and tokens_max
+    # Custom formatter that includes extra fields like elapsed_ms, tokens, and tool info
     class ExtraFormatter(logging.Formatter):
         def format(self, record):
             # Add extra fields to message if they exist
             extras = []
             if hasattr(record, 'elapsed_ms'):
                 extras.append(f"elapsed_ms={record.elapsed_ms}")
+
+            # Token counts (NEW)
+            if hasattr(record, 'prompt_tokens') and record.prompt_tokens:
+                extras.append(f"prompt_tokens={record.prompt_tokens}")
+            if hasattr(record, 'completion_tokens') and record.completion_tokens:
+                extras.append(f"completion_tokens={record.completion_tokens}")
+            if hasattr(record, 'total_tokens') and record.total_tokens:
+                extras.append(f"total_tokens={record.total_tokens}")
+
             if hasattr(record, 'tokens_max'):
                 extras.append(f"tokens_max={record.tokens_max}")
             if hasattr(record, 'status_code'):
