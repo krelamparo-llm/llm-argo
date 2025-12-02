@@ -695,29 +695,30 @@ if active_mode == SessionMode.RESEARCH:
 
 ## Implementation Checklist
 
-### Phase 1: Immediate Wins ✅
-- [ ] Update web_search_tool.py description
-- [ ] Update web_access_tool.py description
-- [ ] Update memory_query_tool.py description
-- [ ] Update memory_write_tool.py description
-- [ ] Implement response_format in web_access_tool.py
-- [ ] Implement _generate_summary() method
-- [ ] Implement _extract_key_facts() method
-- [ ] Implement parallel tool execution in orchestrator.py
-- [ ] Add _execute_single_tool() method
-- [ ] Add _execute_tools_parallel() method
+### Phase 1: Immediate Wins ✅ COMPLETED
+- [x] Update web_search_tool.py description
+- [x] Update web_access_tool.py description
+- [x] Update memory_query_tool.py description
+- [x] Update memory_write_tool.py description
+- [x] Implement response_format in web_access_tool.py
+- [x] Implement _generate_concise_response() method
+- [x] Implement parallel tool execution in orchestrator.py
+- [x] Add _execute_single_tool() method
+- [x] Add _execute_tools_parallel() method
+- [x] Add token counting in llm_client.py
 - [ ] Test with research query
 - [ ] Validate token savings
 - [ ] Validate speed improvements
 
-### Phase 2: Context Optimization
-- [ ] Implement get_context_identifiers() in memory_manager.py
-- [ ] Implement retrieve_chunk_by_id() in memory_manager.py
-- [ ] Create retrieve_context_tool.py
-- [ ] Update build_prompt() to use identifiers
-- [ ] Register retrieve_context tool
-- [ ] Implement _compress_tool_results() in orchestrator.py
-- [ ] Add compaction logic to send_message() loop
+### Phase 2: Context Optimization ✅ COMPLETED
+- [x] Implement get_context_identifiers() in memory_manager.py
+- [x] Implement retrieve_chunk_by_id() in memory_manager.py
+- [x] Implement get_lightweight_context() in memory_manager.py
+- [x] Add get_by_id() to VectorStore base class and implementations
+- [x] Create retrieve_context_tool.py (RetrieveContextTool)
+- [x] Register retrieve_context tool in orchestrator
+- [x] Implement _compress_tool_results() in orchestrator.py
+- [x] Add compaction logic to send_message() loop (threshold: 6+ tool results)
 - [ ] Test with long research sessions
 - [ ] Validate no context overflow
 

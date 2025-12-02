@@ -23,12 +23,25 @@ from ..embeddings import embed_single, embed_texts
 from ..llm_client import ChatMessage, LLMClient
 from ..rag import RetrievedChunk, retrieve_knowledge
 from ..tools.base import ToolResult
-from ..vector_store import get_vector_store
+from ..vector_store import get_vector_store, Document
 from ..utils.json_helpers import extract_json_object
 from .db import MemoryDB, MessageRecord, ProfileFact
 from .prompts import MEMORY_WRITER_INSTRUCTIONS, format_messages_for_prompt
 from .session_manager import SessionManager
 from ..security import TrustLevel
+
+
+@dataclass
+class ContextIdentifier:
+    """Lightweight reference to a memory chunk without full content."""
+
+    chunk_id: str
+    title: str
+    snippet: str  # First ~150 chars
+    url: Optional[str] = None
+    source_type: Optional[str] = None
+    relevance_score: Optional[float] = None
+    timestamp: Optional[str] = None
 
 
 @dataclass
@@ -347,3 +360,171 @@ class MemoryManager:
             trust = chunk.metadata.get("trust_level", "unknown")
             counts[trust] = counts.get(trust, 0) + 1
         return counts
+
+    # ---- Just-In-Time Context Retrieval (Phase 2) ---------------------------
+    def get_context_identifiers(
+        self,
+        query: str,
+        *,
+        max_identifiers: int = 10,
+        namespace: Optional[str] = None,
+    ) -> List[ContextIdentifier]:
+        """Return lightweight identifiers instead of full content.
+
+        This implements the 'just-in-time context retrieval' pattern from
+        Anthropic's context engineering guidance. Instead of loading full
+        content upfront, we return identifiers that can be retrieved on demand.
+
+        Args:
+            query: Search query for semantic matching
+            max_identifiers: Maximum number of identifiers to return
+            namespace: Optional vector store namespace to query
+
+        Returns:
+            List of ContextIdentifier with snippets and metadata
+        """
+        target_namespace = namespace or self.config.collections.rag
+        embedding_vec = embed_single(query)
+        if not embedding_vec:
+            return []
+
+        query_embedding = np.array(embedding_vec, dtype=float)
+        documents = self.vector_store.query(
+            namespace=target_namespace,
+            query_embedding=query_embedding,
+            k=max_identifiers,
+        )
+
+        identifiers: List[ContextIdentifier] = []
+        for doc in documents:
+            metadata = doc.metadata or {}
+            text = doc.text or ""
+
+            # Extract title from metadata or first line of text
+            title = metadata.get("title")
+            if not title:
+                first_line = text.split("\n")[0][:80] if text else "Untitled"
+                title = first_line if first_line else "Untitled"
+
+            # Create snippet (first ~150 chars)
+            snippet = text[:150].strip()
+            if len(text) > 150:
+                snippet += "..."
+
+            identifiers.append(
+                ContextIdentifier(
+                    chunk_id=doc.id,
+                    title=title,
+                    snippet=snippet,
+                    url=metadata.get("url"),
+                    source_type=metadata.get("source_type"),
+                    relevance_score=doc.score,
+                    timestamp=metadata.get("timestamp") or metadata.get("fetched_at"),
+                )
+            )
+
+        self.logger.info(
+            "Retrieved context identifiers",
+            extra={
+                "query_preview": query[:100],
+                "namespace": target_namespace,
+                "count": len(identifiers),
+            },
+        )
+        return identifiers
+
+    def retrieve_chunk_by_id(
+        self,
+        chunk_id: str,
+        *,
+        namespace: Optional[str] = None,
+    ) -> Optional[str]:
+        """Retrieve full content for a specific chunk by ID.
+
+        This is the second part of just-in-time retrieval - only fetch
+        full content when the model explicitly requests it.
+
+        Args:
+            chunk_id: The unique identifier for the chunk
+            namespace: Optional namespace (defaults to RAG collection)
+
+        Returns:
+            Full text content of the chunk, or None if not found
+        """
+        target_namespace = namespace or self.config.collections.rag
+
+        # Try to get document directly by ID
+        try:
+            doc = self.vector_store.get_by_id(
+                namespace=target_namespace,
+                doc_id=chunk_id,
+            )
+            if doc:
+                self.logger.info(
+                    "Retrieved chunk by ID",
+                    extra={
+                        "chunk_id": chunk_id,
+                        "namespace": target_namespace,
+                        "content_length": len(doc.text) if doc.text else 0,
+                    },
+                )
+                return doc.text
+        except Exception as exc:
+            self.logger.warning(
+                "Failed to retrieve chunk by ID",
+                extra={"chunk_id": chunk_id, "error": str(exc)},
+            )
+
+        return None
+
+    def get_lightweight_context(
+        self,
+        session_id: str,
+        user_message: str,
+        *,
+        max_identifiers: int = 8,
+    ) -> Dict[str, Any]:
+        """Get lightweight context with identifiers instead of full content.
+
+        This is an alternative to get_context_for_prompt() that returns
+        identifiers for just-in-time retrieval.
+
+        Returns:
+            Dict with:
+            - short_term_messages: Recent conversation (same as before)
+            - session_summary: Summary text (same as before)
+            - memory_identifiers: List of ContextIdentifier objects
+            - tool_instructions: Instructions for using retrieve_context tool
+        """
+        mem_cfg = self.config.memory
+
+        # Get conversation context (these are small, keep as-is)
+        short_term = self.session_manager.get_recent_messages(session_id)
+        summary = self.session_manager.get_session_summary(session_id)
+
+        # Get identifiers instead of full chunks
+        identifiers = self.get_context_identifiers(
+            user_message,
+            max_identifiers=max_identifiers,
+        )
+
+        self.logger.info(
+            "Prepared lightweight context",
+            extra={
+                "session_id": session_id,
+                "short_term": len(short_term),
+                "identifiers": len(identifiers),
+                "has_summary": bool(summary),
+            },
+        )
+
+        return {
+            "short_term_messages": short_term,
+            "session_summary": summary,
+            "memory_identifiers": identifiers,
+            "tool_instructions": (
+                "To get full content for any memory chunk, use:\n"
+                "retrieve_context(chunk_id=\"<id>\")\n"
+                "Only retrieve chunks you actually need to cite or analyze in detail."
+            ),
+        }

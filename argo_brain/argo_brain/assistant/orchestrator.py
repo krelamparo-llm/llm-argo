@@ -16,7 +16,7 @@ from ..core.memory.session import SessionMode
 from ..memory.manager import MemoryContext, MemoryManager
 from ..memory.session_manager import SessionManager
 from ..memory.tool_tracker import ToolTracker
-from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool
+from ..tools import MemoryQueryTool, MemoryWriteTool, WebAccessTool, RetrieveContextTool
 from ..tools.search import WebSearchTool
 from ..tools.base import Tool, ToolExecutionError, ToolRegistry, ToolRequest, ToolResult
 from ..utils.json_helpers import extract_json_object
@@ -119,6 +119,7 @@ class ArgoAssistant:
                 WebAccessTool(ingestion_manager=self.ingestion_manager),
                 MemoryQueryTool(memory_manager=self.memory_manager),
                 MemoryWriteTool(ingestion_manager=self.ingestion_manager),
+                RetrieveContextTool(memory_manager=self.memory_manager),  # Phase 2: JIT context
             ]
         if tools:
             for tool in tools:
@@ -452,6 +453,94 @@ Continue researching until ALL stopping conditions are met. Resist premature con
             f"Metadata: {metadata_preview}"
         )
 
+    # ---- Conversation Compaction (Phase 2) ----------------------------------
+    def _compress_tool_results(
+        self,
+        tool_results: List[ToolResult],
+        keep_recent: int = 3,
+    ) -> tuple[str, List[ToolResult]]:
+        """Compress tool results into a concise summary when threshold exceeded.
+
+        This implements Anthropic's 'conversation compaction' pattern to prevent
+        context overflow in long research sessions.
+
+        Args:
+            tool_results: Full list of tool results
+            keep_recent: Number of recent results to keep in full
+
+        Returns:
+            Tuple of (summary_text, recent_results_to_keep)
+        """
+        if len(tool_results) <= keep_recent + 2:
+            return "", tool_results  # Not worth compressing
+
+        # Split into old (to compress) and recent (to keep)
+        old_results = tool_results[:-keep_recent]
+        recent_results = tool_results[-keep_recent:]
+
+        # Group old results by tool type
+        by_tool: Dict[str, List[ToolResult]] = {}
+        for result in old_results:
+            tool_name = result.tool_name or "unknown"
+            if tool_name not in by_tool:
+                by_tool[tool_name] = []
+            by_tool[tool_name].append(result)
+
+        # Build summary
+        lines = ["## PREVIOUS TOOL EXECUTION SUMMARY\n"]
+        lines.append(f"(Compressed {len(old_results)} tool calls to save context)\n")
+
+        for tool_name, results in sorted(by_tool.items()):
+            lines.append(f"\n**{tool_name}** ({len(results)} calls):")
+
+            if tool_name == "web_search":
+                queries = []
+                for r in results:
+                    if r.metadata and r.metadata.get("query"):
+                        queries.append(str(r.metadata["query"]))
+                if queries:
+                    lines.append(f"  Searched: {', '.join(queries[:5])}")
+                    if len(queries) > 5:
+                        lines.append(f"  ... and {len(queries) - 5} more queries")
+
+            elif tool_name == "web_access":
+                urls = []
+                for r in results:
+                    if r.metadata and r.metadata.get("url"):
+                        urls.append(str(r.metadata["url"]))
+                lines.append(f"  Fetched {len(urls)} sources:")
+                for url in urls[:5]:
+                    # Truncate long URLs
+                    display_url = url[:80] + "..." if len(url) > 80 else url
+                    lines.append(f"    - {display_url}")
+                if len(urls) > 5:
+                    lines.append(f"    ... and {len(urls) - 5} more sources")
+
+            elif tool_name == "memory_query":
+                lines.append(f"  Queried memory {len(results)} times")
+
+            elif tool_name == "memory_write":
+                lines.append(f"  Stored {len(results)} items to memory")
+
+            else:
+                lines.append(f"  Executed {len(results)} times")
+
+        lines.append("\n---\n## RECENT TOOL RESULTS (Full Details)")
+        lines.append("(See below for the most recent tool outputs)\n")
+
+        summary = "\n".join(lines)
+
+        self.logger.info(
+            "Compressed tool results",
+            extra={
+                "compressed_count": len(old_results),
+                "kept_count": len(recent_results),
+                "summary_length": len(summary),
+            },
+        )
+
+        return summary, recent_results
+
     def _format_research_progress(self, stats: Dict[str, Any]) -> str:
         """Provide feedback with reflection prompts to encourage quality research."""
         sources = len(stats["unique_urls"])
@@ -605,6 +694,30 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                             research_stats["unique_urls"].add(url)
                             research_stats["sources_fetched"] += 1
 
+                # Apply conversation compaction if we have many tool results (Phase 2)
+                # This prevents context overflow in long research sessions
+                COMPACTION_THRESHOLD = 6  # Compress after 6+ tool results
+                if len(tool_results_accum) >= COMPACTION_THRESHOLD:
+                    compression_summary, compressed_results = self._compress_tool_results(
+                        tool_results_accum, keep_recent=3
+                    )
+                    if compression_summary:
+                        # Replace extra_messages with compacted version
+                        # Keep only non-tool-result messages, add summary, then recent results
+                        non_tool_messages = [
+                            msg for msg in extra_messages
+                            if not msg.content.startswith("Tool ") or "TOOL_CALL" in msg.content
+                        ]
+                        extra_messages = non_tool_messages
+                        extra_messages.append(ChatMessage(role="system", content=compression_summary))
+
+                        # Only format recent results for the prompt
+                        results_for_prompt = compressed_results[-len(results):]  # Most recent batch
+                    else:
+                        results_for_prompt = results
+                else:
+                    results_for_prompt = results
+
                 # Update context once with all results
                 context = self.memory_manager.get_context_for_prompt(
                     session_id,
@@ -618,8 +731,8 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                     call_json = json.dumps({"tool_name": proposal.tool, "arguments": arguments}, ensure_ascii=False)
                     extra_messages.append(ChatMessage(role="assistant", content=f"TOOL_CALL {call_json}"))
 
-                # Add all tool results
-                for result in results:
+                # Add all tool results (using compacted set if applicable)
+                for result in results_for_prompt:
                     result_msg = self._format_tool_result_for_prompt(result)
                     if active_mode == SessionMode.RESEARCH:
                         result_msg += self._format_research_progress(research_stats)

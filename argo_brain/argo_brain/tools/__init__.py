@@ -4,6 +4,7 @@ from .base import Tool, ToolRegistry, ToolRequest, ToolResult, format_tool_manif
 from .memory import MemoryQueryTool, MemoryWriteTool
 from .web import WebAccessTool
 from .db import DatabaseQueryTool, QueryName, run_query
+from .retrieve_context import RetrieveContextTool
 
 __all__ = [
     "Tool",
@@ -14,6 +15,7 @@ __all__ = [
     "WebAccessTool",
     "MemoryQueryTool",
     "MemoryWriteTool",
+    "RetrieveContextTool",
     "DatabaseQueryTool",
     "QueryName",
     "run_query",

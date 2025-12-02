@@ -88,3 +88,27 @@ class ChromaVectorStore(VectorStore):
         if ids is not None:
             return len(ids)
         return 0
+
+    def get_by_id(
+        self,
+        namespace: str,
+        doc_id: str,
+    ) -> Optional[Document]:
+        """Retrieve a single document by its ID using ChromaDB's get method."""
+        collection = self._get_collection(namespace)
+        try:
+            response = collection.get(ids=[doc_id], include=["documents", "metadatas"])
+            documents = response.get("documents", [])
+            metadatas = response.get("metadatas", [])
+            ids = response.get("ids", [])
+
+            if documents and len(documents) > 0 and documents[0]:
+                return Document(
+                    id=ids[0] if ids else doc_id,
+                    text=documents[0],
+                    score=1.0,  # Direct lookup, no relevance score
+                    metadata=metadatas[0] if metadatas else {},
+                )
+        except Exception:
+            pass
+        return None

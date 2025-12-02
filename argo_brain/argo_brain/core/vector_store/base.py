@@ -53,3 +53,15 @@ class VectorStore(ABC):
         filters: Optional[Metadata] = None,
     ) -> int:
         """Delete documents matching the ids or filters and return count."""
+
+    def get_by_id(
+        self,
+        namespace: str,
+        doc_id: str,
+    ) -> Optional["Document"]:
+        """Retrieve a single document by its ID.
+
+        Default implementation returns None. Subclasses should override
+        for backends that support direct ID lookup.
+        """
+        return None

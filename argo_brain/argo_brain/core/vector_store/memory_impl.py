@@ -100,5 +100,22 @@ class InMemoryVectorStore(VectorStore):
                 return False
         return True
 
+    def get_by_id(
+        self,
+        namespace: str,
+        doc_id: str,
+    ) -> Optional[Document]:
+        """Retrieve a single document by its ID from in-memory storage."""
+        docs = self._namespaces.get(namespace, [])
+        for stored in docs:
+            if stored.id == doc_id:
+                return Document(
+                    id=stored.id,
+                    text=stored.text,
+                    score=1.0,  # Direct lookup, no relevance score
+                    metadata=stored.metadata,
+                )
+        return None
+
 
 __all__ = ["InMemoryVectorStore"]
