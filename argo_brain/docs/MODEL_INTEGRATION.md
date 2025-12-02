@@ -328,7 +328,7 @@ No code changes required! The new parameters are backward compatible and use sen
 
 - **Quick answers**: `max_tokens=512-1024`
 - **Standard responses**: `max_tokens=2048`
-- **Comprehensive analysis**: `max_tokens=4096-8192`
+- **Comprehensive analysis**: `max_tokens=4096-16384`
 - **Full capability**: `max_tokens=65536` (Qwen3-Coder)
 
 ### Repetition Control

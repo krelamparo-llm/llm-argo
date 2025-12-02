@@ -52,7 +52,7 @@ class LLMClient:
         Args:
             messages: Chat messages to send
             temperature: Sampling temperature (default from config: 0.7)
-            max_tokens: Maximum tokens to generate (default from config: 2048)
+            max_tokens: Maximum tokens to generate (default from config: 16384)
             top_p: Nucleus sampling probability (default from config: 0.8)
             top_k: Top-K sampling limit (default from config: 20)
             repetition_penalty: Penalty for repetition (default from config: 1.05)

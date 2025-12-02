@@ -30,6 +30,7 @@ class ModelConfig:
     has_chat_template: bool = False
     has_tool_parser: bool = False
     has_config: bool = False
+    has_argo_prompts: bool = False  # NEW: Per-model prompt configuration
 
     # Loaded components
     tokenizer_config: Optional[Dict[str, Any]] = None
@@ -37,6 +38,7 @@ class ModelConfig:
     tool_parser_class: Optional[type] = None
     model_config: Optional[Dict[str, Any]] = None
     generation_config: Optional[Dict[str, Any]] = None
+    argo_prompts: Optional[Any] = None  # NEW: ModelPromptConfig instance
 
     # Recommended settings
     recommended_temperature: Optional[float] = None
@@ -167,7 +169,42 @@ class ModelRegistry:
         if readme_path.exists():
             self._extract_recommendations_from_readme(readme_path, config)
 
+        # NEW: Load argo_prompts.yaml or argo_prompts.json for per-model prompt config
+        self._load_argo_prompts(model_dir, config)
+
         return config
+
+    def _load_argo_prompts(self, model_dir: Path, config: ModelConfig) -> None:
+        """Load Argo-specific prompt configuration if available.
+
+        Checks for argo_prompts.yaml or argo_prompts.json in the model directory.
+        If not found, attempts to infer configuration from model name.
+
+        Args:
+            model_dir: Path to model directory
+            config: ModelConfig to update
+        """
+        from .model_prompts import load_prompt_config, infer_prompt_config
+
+        # Try to load explicit configuration
+        prompt_config = load_prompt_config(model_dir)
+
+        if prompt_config:
+            config.has_argo_prompts = True
+            config.argo_prompts = prompt_config
+            self.logger.info(
+                f"Loaded argo_prompts for {config.name}: "
+                f"format={prompt_config.tool_calling.format}, "
+                f"thinking={prompt_config.thinking.enabled}"
+            )
+        else:
+            # Infer from model name
+            prompt_config = infer_prompt_config(config.name, model_dir)
+            config.argo_prompts = prompt_config
+            self.logger.debug(
+                f"Inferred prompt config for {config.name}: "
+                f"format={prompt_config.tool_calling.format}"
+            )
 
     def _extract_recommendations_from_readme(
         self, readme_path: Path, config: ModelConfig
@@ -261,6 +298,27 @@ class ModelRegistry:
         """
         return list(self._models.keys())
 
+    def get_prompt_config(self, model_name: str) -> "ModelPromptConfig":
+        """Get prompt configuration for a model.
+
+        Returns model-specific config if available, otherwise infers from name.
+
+        Args:
+            model_name: Model name (folder name)
+
+        Returns:
+            ModelPromptConfig instance
+        """
+        from .model_prompts import ModelPromptConfig, infer_prompt_config
+
+        model = self.get_model(model_name)
+
+        if model and model.argo_prompts:
+            return model.argo_prompts
+
+        # Infer from model name if not found
+        return infer_prompt_config(model_name)
+
     def load_tokenizer(self, model: ModelConfig) -> Optional[Any]:
         """Load tokenizer for a model.
 
@@ -346,7 +404,7 @@ class ModelRegistry:
             "top_p": 0.8,
             "top_k": 20,
             "repetition_penalty": 1.05,
-            "max_tokens": 2048,
+            "max_tokens": 16384,
         }
 
         # Override with model-specific recommendations
@@ -401,7 +459,7 @@ class ModelRegistry:
                     "top_p": 0.8,
                     "top_k": 20,
                     "repetition_penalty": 1.05,
-                    "max_tokens": 2048,
+                    "max_tokens": 16384,
                 },
             }
 

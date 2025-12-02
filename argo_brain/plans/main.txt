@@ -384,7 +384,7 @@ Run llama-cli with:
 
 -ngl 999 (offload as many layers as possible to GPU).
 
-Context sizes like --ctx-size 8192.
+Context sizes like --ctx-size 16384.
 
 Observed GPU and CPU utilization via nvidia-smi and Windows tools.
 

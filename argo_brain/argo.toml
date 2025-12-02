@@ -21,7 +21,7 @@ temperature = 0.7              # Higher than default for more creative responses
 top_p = 0.8                    # Nucleus sampling probability
 top_k = 20                     # Limit vocabulary to top 20 tokens
 repetition_penalty = 1.05      # Reduce repetition in output
-max_tokens = 2048              # Increased from 512 for longer responses
+max_tokens = 16384              # Increased from 512 for longer responses
 
 # Tokenizer configuration (optional)
 # Set to enable HuggingFace transformers integration
