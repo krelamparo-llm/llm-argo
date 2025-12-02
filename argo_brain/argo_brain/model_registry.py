@@ -324,7 +324,10 @@ class ModelRegistry:
 
         except Exception as exc:
             self.logger.error(f"Failed to load tool parser for {model.name}: {exc}")
-            return None
+            self.logger.info(f"Falling back to XMLToolParser for {model.name}")
+            # Fall back to default XML parser
+            from .tools.xml_parser import XMLToolParser
+            return XMLToolParser
 
     def get_recommended_config(self, model: ModelConfig) -> Dict[str, Any]:
         """Get recommended configuration for a model.
