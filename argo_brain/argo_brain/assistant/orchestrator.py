@@ -814,15 +814,7 @@ Continue researching until ALL stopping conditions are met. Resist premature con
         recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
         self.memory_manager.extract_and_store_memories(session_id, recent_turns)
 
-        # Track tool executions via ToolTracker
-        for result in tool_results_accum:
-            request = ToolRequest(
-                session_id=session_id,
-                query=user_message,
-                metadata=result.metadata or {},
-                session_mode=active_mode,
-            )
-            self.tool_tracker.process_result(session_id, request, result)
+        # Tool tracking is handled in run_tool() - no need to duplicate here
 
         self.logger.info(
             "Assistant completed response",
@@ -889,7 +881,7 @@ Continue researching until ALL stopping conditions are met. Resist premature con
         session_id: str,
         user_message: str,
         active_mode: SessionMode,
-        max_workers: int = 3
+        max_workers: int = 10  # Increased from 3: web I/O is highly parallelizable
     ) -> List[ToolResult]:
         """Execute multiple tools in parallel using ThreadPoolExecutor.
 

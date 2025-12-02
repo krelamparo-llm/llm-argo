@@ -66,11 +66,17 @@ class ChromaVectorStore(VectorStore):
         distances = response.get("distances", [[]])[0] or []
         results: List[Document] = []
         for doc, meta, doc_id, distance in zip(documents, metadata, ids, distances):
+            # Convert distance to similarity score (higher is better)
+            # ChromaDB returns L2 distance by default (0 = identical, higher = less similar)
+            # Convert to similarity: 1 / (1 + distance)
+            # This ensures: distance=0 → score=1.0, distance=∞ → score→0
+            similarity = 1.0 / (1.0 + float(distance)) if distance is not None else 0.0
+
             results.append(
                 Document(
                     id=doc_id,
                     text=doc or "",
-                    score=float(distance) if distance is not None else 0.0,
+                    score=similarity,
                     metadata=meta or {},
                 )
             )
