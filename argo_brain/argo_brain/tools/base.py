@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
 
 from ..core.memory.session import SessionMode
+from .renderer import DefaultToolRenderer, ToolFormat, ToolRenderer
 
 
 @dataclass
@@ -68,8 +69,9 @@ class ToolExecutionError(RuntimeError):
 class ToolRegistry:
     """Simple in-memory registry of tool implementations."""
 
-    def __init__(self) -> None:
+    def __init__(self, renderer: Optional[ToolRenderer] = None) -> None:
         self._tools: Dict[str, Tool] = {}
+        self.renderer = renderer or DefaultToolRenderer()
 
     def register(self, tool: Tool) -> None:
         self._tools[tool.name] = tool
@@ -82,29 +84,53 @@ class ToolRegistry:
     def list_tools(self) -> List[Tool]:
         return list(self._tools.values())
 
-    def manifest(self, filter_tools: Optional[List[str]] = None) -> str:
-        """Render a manifest string summarizing all registered tools.
+    def manifest(
+        self,
+        filter_tools: Optional[List[str]] = None,
+        format: ToolFormat = ToolFormat.TEXT_MANIFEST,
+    ) -> Any:
+        """Render a manifest of registered tools in the specified format.
 
         Args:
             filter_tools: Optional list of tool names to include. If None, includes all tools.
+            format: The format to render tools in (default: TEXT_MANIFEST for backward compatibility)
 
         Returns:
-            Formatted manifest string
+            Rendered tools in the specified format:
+            - For text formats: str
+            - For structured formats: List[Dict]
         """
         if not self._tools:
-            return ""
+            # For text formats, return message; for structured formats, return empty list
+            if format in (ToolFormat.TEXT_MANIFEST, ToolFormat.QWEN_XML, ToolFormat.CONCISE_TEXT):
+                return "No external tools available for this mode/phase."
+            else:
+                return []
 
         # Filter tools if requested
-        if filter_tools is not None:
-            tools = [self._tools[name] for name in filter_tools if name in self._tools]
-        else:
-            tools = list(self._tools.values())
+        tools = self._get_filtered_tools(filter_tools)
 
         if not tools:
-            return ""
+            # For text formats, return message; for structured formats, return empty list
+            if format in (ToolFormat.TEXT_MANIFEST, ToolFormat.QWEN_XML, ToolFormat.CONCISE_TEXT):
+                return "No external tools available for this mode/phase."
+            else:
+                return []
 
-        entries = [format_tool_manifest_entry(tool) for tool in tools]
-        return "Available tools:\n" + "\n\n".join(entries)
+        return self.renderer.render(tools, format)
+
+    def _get_filtered_tools(self, filter_tools: Optional[List[str]]) -> List[Tool]:
+        """Get filtered list of tools.
+
+        Args:
+            filter_tools: Optional list of tool names to include
+
+        Returns:
+            List of Tool instances
+        """
+        if filter_tools is not None:
+            return [self._tools[name] for name in filter_tools if name in self._tools]
+        return list(self._tools.values())
 
 
 DEFAULT_TOOL_REGISTRY = ToolRegistry()

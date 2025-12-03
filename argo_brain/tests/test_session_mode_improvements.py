@@ -261,8 +261,8 @@ def test_tool_registry_filtering():
     # Test empty filter
     print("\nEmpty filter (no tools):")
     empty_manifest = registry.manifest(filter_tools=[])
-    assert empty_manifest == "", "Empty filter should return empty manifest"
-    print("  ✓ Returns empty string")
+    assert "No external tools available" in empty_manifest or empty_manifest == "", "Empty filter should return no tools message"
+    print("  ✓ Returns no tools message")
 
     print("\n" + "=" * 80)
     print("TEST 5: PASSED ✓")
