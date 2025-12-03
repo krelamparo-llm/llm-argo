@@ -270,7 +270,7 @@ class ArgoAssistant:
 RESEARCH FRAMEWORK (Planning-First Architecture):
 
 PHASE 1: PLANNING
-IMPORTANT: Output ONLY a research plan using this exact format (simple text, NO nested XML):
+First, output a research plan using this exact format (simple text, NO nested XML):
 
 <research_plan>
 Research question: [Your question here]
@@ -293,6 +293,7 @@ MUST complete the closing tag: </research_plan>
 DO NOT use nested XML tags inside the plan.
 
 PHASE 2: EXECUTION
+**IMMEDIATELY after outputting your research plan**, begin tool execution.
 CRITICAL: You MUST use tools via {tool_format_label}. Do NOT answer from memory.
 For each search iteration:
 {think_eval}
@@ -1134,9 +1135,20 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
                     # If plan was created but no tool call in same response, prompt for tool execution
                     if "<tool_call>" not in response_text.lower():
+                        # Build format-specific example
+                        if self.use_xml_format:
+                            tool_example = '<tool_call>\n<function=web_search>\n<parameter=query>your first search query from plan</parameter>\n</function>\n</tool_call>'
+                            closing_tag = '</tool_call>'
+                        else:
+                            tool_example = '<tool_call>\n{"name": "web_search", "arguments": {"query": "your first search query from plan"}}\n</tool_call>'
+                            closing_tag = '</tool_call>'
+
                         prompt_for_tools = (
-                            "Good! You've created a research plan. Now IMMEDIATELY begin executing your first search.\n\n"
-                            "Output your FIRST tool call now (no other text)."
+                            f"RESEARCH PLAN RECEIVED. Now execute PHASE 2: EXECUTION.\n\n"
+                            f"You MUST output a tool call using this EXACT format:\n\n"
+                            f"{tool_example}\n\n"
+                            f"Replace 'your first search query from plan' with the FIRST search from your plan's 'Search strategy' section.\n"
+                            f"Output ONLY the tool call above. NO explanations. STOP immediately after {closing_tag}."
                         )
                         extra_messages.append(ChatMessage(role="system", content=prompt_for_tools))
                         self.logger.info("Prompting for tool execution after plan", extra={"session_id": session_id})
@@ -1338,14 +1350,32 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     self.logger.info("Prompting for tool execution in QUICK_LOOKUP mode", extra={"session_id": session_id, "reason": "tool_intent_detected"})
                     continue  # Continue loop to get tool call
 
-            # No tool call detected and no recovery possible - log and exit
+            # No tool call detected - handle based on mode
+            # In research mode with a plan, retry more aggressively before giving up
+            if active_mode == SessionMode.RESEARCH and research_stats["has_plan"] and research_stats["tool_calls"] == 0 and iterations < 3:
+                retry_prompt = (
+                    "CRITICAL ERROR: You created a research plan but have not executed ANY tools yet.\n\n"
+                    "You MUST now output a tool call to execute your first search from the plan.\n\n"
+                    "Example (use YOUR search query from your plan):\n"
+                    f"{'<tool_call><function=web_search><parameter=query>Claude vs GPT-4 differences</parameter></function></tool_call>' if self.use_xml_format else '<tool_call>{\"name\": \"web_search\", \"arguments\": {\"query\": \"Claude vs GPT-4 differences\"}}</tool_call>'}\n\n"
+                    "Output ONLY the tool call above. No explanation. STOP immediately after the closing tag."
+                )
+                extra_messages.append(ChatMessage(role="system", content=retry_prompt))
+                self.logger.warning(
+                    "Research mode: no tool call after plan, retrying",
+                    extra={"session_id": session_id, "retry_attempt": iterations}
+                )
+                continue  # Retry
+
+            # For other modes or after retries exhausted, exit
             self.logger.warning(
                 "Conversation loop exiting without tool call",
                 extra={
                     "session_id": session_id,
                     "iterations": iterations,
                     "response_preview": response_text[:200],
-                    "tool_results_count": len(tool_results_accum)
+                    "tool_results_count": len(tool_results_accum),
+                    "research_has_plan": research_stats.get("has_plan", False) if active_mode == SessionMode.RESEARCH else None
                 }
             )
             break
