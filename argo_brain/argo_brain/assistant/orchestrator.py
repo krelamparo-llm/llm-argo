@@ -1359,11 +1359,18 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             extra={"session_id": session_id, "tool_runs": len(tool_results_accum)},
         )
 
-        # Include research plan in raw_text if it exists (RESEARCH mode)
+        # Include research plan in raw_text if it exists (RESEARCH mode), but avoid duplication
         full_raw_text = response_text
         if active_mode == SessionMode.RESEARCH and research_stats.get("plan_text"):
             plan_text = research_stats["plan_text"]
-            full_raw_text = f"<research_plan>\n{plan_text}\n</research_plan>\n\n{response_text}"
+            if "<research_plan" not in response_text.lower():
+                full_raw_text = f"<research_plan>\n{plan_text}\n</research_plan>\n\n{response_text}"
+            else:
+                # If the model already returned the plan, don't prepend another copy
+                self.logger.debug(
+                    "Research plan already present in response; skipping prepend",
+                    extra={"session_id": session_id}
+                )
 
         return AssistantResponse(
             text=final_text,
