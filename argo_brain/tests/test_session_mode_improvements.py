@@ -31,9 +31,9 @@ def test_prompt_lengths():
     quick_lines = len(quick_prompt.split('\n'))
     print(f"\n✓ QUICK_LOOKUP prompt: {quick_lines} lines, {len(quick_prompt)} chars")
     assert quick_lines >= 48, f"QUICK_LOOKUP prompt too short: {quick_lines} lines (expected >=48)"
-    assert ("Maximum" in quick_prompt and "1 tool call" in quick_prompt), "QUICK_LOOKUP should enforce 1 tool max"
+    assert ("Maximum" in quick_prompt and "2 tool calls" in quick_prompt), "QUICK_LOOKUP should allow 2 tool calls (aligned with MAX_TOOL_CALLS_BY_MODE)"
     assert "PRIORITY ORDER" in quick_prompt, "QUICK_LOOKUP should have priority order"
-    print("  - Contains '1 tool call' maximum ✓")
+    print("  - Contains '2 tool calls' maximum (aligned with code) ✓")
     print("  - Contains 'PRIORITY ORDER' ✓")
 
     # Test INGEST prompt

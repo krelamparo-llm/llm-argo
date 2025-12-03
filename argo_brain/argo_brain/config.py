@@ -259,6 +259,15 @@ class VectorStoreConfig:
     path: Path = VECTOR_DB_PATH
 
 
+def _get_security_int_setting(name: str, default: int) -> int:
+    """Get integer security setting from env or config."""
+    env_key = f"ARGO_SECURITY_{name.upper()}"
+    if env_key in os.environ:
+        return int(os.environ[env_key])
+    security_section = _CONFIG_DATA.get("security", {})
+    return int(security_section.get(name, default))
+
+
 @dataclass(frozen=True)
 class SecurityConfig:
     """Application-layer security controls."""
@@ -269,6 +278,19 @@ class SecurityConfig:
     suspicious_phrases: tuple[str, ...] = field(default_factory=_security_phrases_default)
     web_allowed_schemes: tuple[str, ...] = field(default_factory=_security_scheme_default)
     web_allowed_hosts: tuple[str, ...] = field(default_factory=_security_host_default)
+
+    # Tool-specific limits (Issue 6: ToolPolicy coverage)
+    web_search_min_query_length: int = _get_security_int_setting("web_search_min_query_length", 2)
+    web_search_max_query_length: int = _get_security_int_setting("web_search_max_query_length", 500)
+    web_search_max_results: int = _get_security_int_setting("web_search_max_results", 20)
+    memory_write_max_content_size: int = _get_security_int_setting("memory_write_max_content_size", 50000)
+    memory_write_allowed_namespaces: tuple[str, ...] = field(
+        default_factory=lambda: _get_security_list_setting(
+            "memory_write_allowed_namespaces",
+            ["default", "personal", "research", "argo_reading_history", "argo_notes_journal"]
+        )
+    )
+    retrieve_context_max_chunk_id_length: int = _get_security_int_setting("retrieve_context_max_chunk_id_length", 200)
 
 
 @dataclass(frozen=True)

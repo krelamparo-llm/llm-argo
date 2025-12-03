@@ -89,8 +89,11 @@ class RetrieveContextTool:
                 tool_name=self.name,
                 summary=f"Chunk '{chunk_id}' not found",
                 content="",
-                error=f"No chunk found with ID '{chunk_id}'",
-                metadata={"chunk_id": chunk_id, "found": False},
+                metadata={
+                    "chunk_id": chunk_id,
+                    "found": False,
+                    "error": f"No chunk found with ID '{chunk_id}'",
+                },
                 snippets=[],
             )
 

@@ -364,7 +364,7 @@ PRIORITY ORDER (Follow strictly):
 3. **Direct answer** - Provide answer immediately after tool result (no multi-phase research)
 
 TOOL USAGE GUIDELINES:
-- **Maximum**: 1 tool call per query (strictly enforced)
+- **Maximum**: 2 tool calls per query (1 preferred, fallback allowed for follow-up)
 - **Prefer memory_query** - Check if we've researched this before (faster than web search)
 - **Use web_search** - If topic is completely new or requires current information
 - **Format**: {tool_format_label}
@@ -393,14 +393,14 @@ OUTPUT FORMAT:
 - If uncertain, state it briefly and answer with available info
 
 AVOID:
-- Multiple tool calls (max 1)
+- More than 2 tool calls (use RESEARCH mode for deeper investigation)
 - Long research processes (use RESEARCH mode for that)
 - Planning phases (answer directly)
 - Asking follow-up questions (answer with what you have)
 
 STOPPING CONDITIONS:
 ✓ Answered from context (no tools needed), OR
-✓ Made 1 tool call and provided answer based on result
+✓ Made 1-2 tool calls and provided answer based on results
 
 Remember: Speed and conciseness are priorities. If you need deep research with multiple sources, suggest the user switch to RESEARCH mode."""
 
@@ -1255,9 +1255,13 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 continue
 
             # Research mode: trigger explicit synthesis after tool execution
-            if active_mode == SessionMode.RESEARCH and research_stats["tool_calls"] > 0:
-                # Check if we've already triggered synthesis
-                if not research_stats.get("synthesis_triggered"):
+            # Only trigger when stopping conditions are met (plan exists + 3+ sources)
+            if active_mode == SessionMode.RESEARCH and not research_stats.get("synthesis_triggered"):
+                has_plan = research_stats.get("has_plan", False)
+                sources_count = len(research_stats.get("unique_urls", set()))
+
+                # Check if stopping conditions are met
+                if has_plan and sources_count >= 3:
                     research_stats["synthesis_triggered"] = True
 
                     # Add explicit synthesis request

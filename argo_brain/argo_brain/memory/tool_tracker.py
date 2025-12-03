@@ -1,12 +1,10 @@
-"""Tool execution tracking and web result caching."""
+"""Tool execution tracking."""
 
 from __future__ import annotations
 
 import logging
 from typing import List, Optional
-from uuid import uuid4
 
-from ..core.memory.document import SourceDocument
 from ..core.memory.ingestion import IngestionManager
 from ..tools.base import ToolRequest, ToolResult
 from .db import MemoryDB, ToolRunRecord
@@ -69,42 +67,24 @@ class ToolTracker:
 
         Side effects:
             - Logs tool run to database
-            - Caches web fetch results in ephemeral web_cache
+
+        Note:
+            Web fetch results are NOT cached here - WebAccessTool already
+            handles ingestion directly to avoid duplicate entries in the
+            vector store. See argo_brain/tools/web.py:152.
         """
         # Always log the tool run
         self.log_tool_run(session_id, request, result)
 
-        # Cache web results if applicable
-        if result.tool_name == "web_access" and result.content:
-            self._cache_web_content(result)
+        # Note: web_access ingestion removed - handled by WebAccessTool directly
+        # to prevent duplicate entries in vector store (was causing storage bloat
+        # and retrieval pollution with duplicate content under different IDs).
 
         # Future: Cache search results, memory query results, etc.
 
     def recent_runs(self, session_id: str, limit: int = 10) -> List[ToolRunRecord]:
         """Retrieve recent tool executions."""
         return self.db.recent_tool_runs(session_id, limit)
-
-    def _cache_web_content(self, result: ToolResult) -> None:
-        """Store web fetch result in ephemeral cache."""
-        metadata = result.metadata or {}
-        url = metadata.get("url", "unknown")
-
-        doc = SourceDocument(
-            id=f"tool-{uuid4().hex}",
-            source_type="tool_output",
-            raw_text=result.content,
-            cleaned_text=result.content,
-            url=url,
-            title=metadata.get("title"),
-            metadata=metadata,
-        )
-
-        self.ingestion_manager.ingest_document(doc, ephemeral=True)
-
-        self.logger.info(
-            "Cached web tool result",
-            extra={"url": url, "content_length": len(result.content)},
-        )
 
 
 __all__ = ["ToolTracker"]
