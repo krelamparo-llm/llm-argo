@@ -294,6 +294,33 @@ class SecurityConfig:
 
 
 @dataclass(frozen=True)
+class DebugConfig:
+    """Debug mode configuration for verbose logging.
+
+    Enable via environment variables for easier debugging without code changes:
+    - ARGO_DEBUG_RESEARCH=true: Verbose research mode logging
+    - ARGO_DEBUG_TOOLS=true: Verbose tool execution logging
+    - ARGO_DEBUG_ALL=true: Enable all debug modes
+    """
+
+    # Research mode debugging
+    research_mode: bool = os.environ.get("ARGO_DEBUG_RESEARCH", "").lower() in ("true", "1", "yes")
+
+    # Tool execution debugging
+    tool_execution: bool = os.environ.get("ARGO_DEBUG_TOOLS", "").lower() in ("true", "1", "yes")
+
+    # Enable all debug modes
+    _all: bool = os.environ.get("ARGO_DEBUG_ALL", "").lower() in ("true", "1", "yes")
+
+    def __post_init__(self):
+        """Apply DEBUG_ALL flag if set."""
+        if self._all:
+            # Override individual flags when DEBUG_ALL is set
+            object.__setattr__(self, "research_mode", True)
+            object.__setattr__(self, "tool_execution", True)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Aggregate configuration for the Argo Brain runtime."""
 
@@ -304,6 +331,7 @@ class AppConfig:
     embed_model: str = DEFAULT_EMBED_MODEL
     vector_store: VectorStoreConfig = VectorStoreConfig()
     security: SecurityConfig = SecurityConfig()
+    debug: DebugConfig = DebugConfig()
 
 
 CONFIG: Final[AppConfig] = AppConfig()

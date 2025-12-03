@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Set
 if TYPE_CHECKING:
     from ..tools.base import ToolResult
 
+from ..config import CONFIG
+
 
 @dataclass
 class ResearchStats:
@@ -83,14 +85,16 @@ class ResearchStats:
             query = arguments.get("query", user_message)
             self.search_queries.append(str(query))
 
-            self._logger.debug(
-                f"Tracked web_search (path={execution_path})",
-                extra={
-                    "session_id": self._session_id,
-                    "query": query,
-                    "execution_path": execution_path
-                }
-            )
+            # Only log in debug mode
+            if CONFIG.debug.research_mode:
+                self._logger.debug(
+                    f"Tracked web_search (path={execution_path})",
+                    extra={
+                        "session_id": self._session_id,
+                        "query": query,
+                        "execution_path": execution_path
+                    }
+                )
 
         elif tool_name == "web_access":
             if result.metadata:
@@ -102,11 +106,19 @@ class ResearchStats:
 
                     # Log if this is a NEW unique URL
                     if len(self.unique_urls) > before_count:
-                        self._logger.info(
-                            f"Added unique URL (total={len(self.unique_urls)}, path={execution_path})",
+                        # Always log new URLs at INFO level (important milestone)
+                        # But add extra detail in debug mode
+                        log_level = logging.INFO if not CONFIG.debug.research_mode else logging.DEBUG
+                        message = f"Added unique URL (total={len(self.unique_urls)}, path={execution_path})"
+                        if CONFIG.debug.research_mode:
+                            message += f" - url={url}"
+
+                        self._logger.log(
+                            log_level,
+                            message,
                             extra={
                                 "session_id": self._session_id,
-                                "url": url,
+                                "url": url if CONFIG.debug.research_mode else "<redacted>",
                                 "unique_count": len(self.unique_urls),
                                 "execution_path": execution_path
                             }
