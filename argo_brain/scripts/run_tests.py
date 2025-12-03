@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from argo_brain.assistant.orchestrator import ArgoAssistant, SessionMode
 from argo_brain.config import CONFIG
+from argo_brain.log_setup import setup_logging
 
 
 class TestCase:
@@ -413,6 +414,14 @@ def main():
     parser.add_argument("--list", action="store_true", help="List all available tests")
 
     args = parser.parse_args()
+
+    # Initialize logging system
+    log_level = "DEBUG" if args.verbose else "INFO"
+    logger = setup_logging(level=log_level)
+
+    if args.verbose:
+        print(f"[Logging initialized at level: {log_level}]")
+        print(f"[Logs will be written to: .argo_data/state/logs/argo_brain.log]")
 
     if args.list:
         print("\nAvailable tests:\n")
