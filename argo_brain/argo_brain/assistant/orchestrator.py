@@ -1188,15 +1188,17 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     # Track research progress
                     research_stats["tool_calls"] += 1
                     arguments = proposal.arguments or {}
+
                     if proposal.tool == "web_search":
                         research_stats["searches"] += 1
                         query = arguments.get("query", user_message)
                         research_stats["search_queries"].append(str(query))
-                    elif proposal.tool == "web_access" and result.metadata:
-                        url = result.metadata.get("url")
-                        if url:
-                            research_stats["unique_urls"].add(url)
-                            research_stats["sources_fetched"] += 1
+                    elif proposal.tool == "web_access":
+                        if result.metadata:
+                            url = result.metadata.get("url")
+                            if url:
+                                research_stats["unique_urls"].add(url)
+                                research_stats["sources_fetched"] += 1
 
                 # Apply conversation compaction if we have many tool results (Phase 2)
                 # This prevents context overflow in long research sessions
@@ -1264,6 +1266,21 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     session_mode=active_mode,
                 )
                 tool_results_accum.append(result)
+
+                # Track research progress (same as batch execution path)
+                if active_mode == SessionMode.RESEARCH:
+                    research_stats["tool_calls"] += 1
+                    if tool_name == "web_search":
+                        research_stats["searches"] += 1
+                        query = arguments.get("query", user_message)
+                        research_stats["search_queries"].append(str(query))
+                    elif tool_name == "web_access":
+                        if result.metadata:
+                            url = result.metadata.get("url")
+                            if url:
+                                research_stats["unique_urls"].add(url)
+                                research_stats["sources_fetched"] += 1
+
                 context = self.memory_manager.get_context_for_prompt(
                     session_id,
                     user_message,
@@ -1368,16 +1385,28 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 continue  # Retry
 
             # For other modes or after retries exhausted, exit
-            self.logger.warning(
-                "Conversation loop exiting without tool call",
-                extra={
-                    "session_id": session_id,
-                    "iterations": iterations,
-                    "response_preview": response_text[:200],
-                    "tool_results_count": len(tool_results_accum),
-                    "research_has_plan": research_stats.get("has_plan", False) if active_mode == SessionMode.RESEARCH else None
-                }
-            )
+            if active_mode == SessionMode.RESEARCH:
+                sources_count = len(research_stats.get("unique_urls", set()))
+                self.logger.info(
+                    "RESEARCH mode exiting",
+                    extra={
+                        "session_id": session_id,
+                        "has_plan": research_stats.get("has_plan", False),
+                        "sources_count": sources_count,
+                        "synthesis_triggered": research_stats.get("synthesis_triggered", False)
+                    }
+                )
+            else:
+                self.logger.info(
+                    "Conversation loop exiting without tool call",
+                    extra={
+                        "session_id": session_id,
+                        "iterations": iterations,
+                        "response_preview": response_text[:200],
+                        "tool_results_count": len(tool_results_accum),
+                        "research_has_plan": research_stats.get("has_plan", False) if active_mode == SessionMode.RESEARCH else None
+                    }
+                )
             break
 
         thought, final_text = self._split_think(response_text)

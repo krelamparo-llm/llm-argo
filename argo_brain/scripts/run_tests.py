@@ -252,20 +252,27 @@ class TestRunner:
 
                     print("Assistant response:")
 
-                    # Show raw text if available (includes <research_plan>, <think>, etc.)
+                    # Save response to debug file
+                    debug_file = Path(f"/tmp/test_{test_case.test_id.lower()}_response.txt")
                     if response.raw_text:
-                        print("[Full response with tags]:")
-                        print(response.raw_text)
+                        with open(debug_file, "w") as f:
+                            f.write(f"Test: {test_case.test_id}\n")
+                            f.write(f"Input: {user_input}\n\n")
+                            f.write("="*80 + "\n")
+                            f.write(response.raw_text)
 
-                        # In verbose mode, also save to file for debugging
                         if self.verbose:
-                            debug_file = Path(f"/tmp/test_{test_case.test_id.lower()}_response.txt")
-                            with open(debug_file, "w") as f:
-                                f.write(f"Test: {test_case.test_id}\n")
-                                f.write(f"Input: {user_input}\n\n")
-                                f.write("="*80 + "\n")
-                                f.write(response.raw_text)
+                            # Verbose: show full response
+                            print("[Full response with tags]:")
+                            print(response.raw_text)
                             print(f"[Response saved to: {debug_file}]")
+                        else:
+                            # Non-verbose: show summary only
+                            response_length = len(response.raw_text)
+                            has_synthesis = "<synthesis>" in response.raw_text
+                            has_plan = "<research_plan>" in response.raw_text
+                            print(f"[Response: {response_length} chars, plan={'✓' if has_plan else '✗'}, synthesis={'✓' if has_synthesis else '✗'}]")
+                            print(f"[Full response saved to: {debug_file}]")
                     else:
                         # Fallback to cleaned text
                         response_text = response.text if response.text else "(empty response)"
