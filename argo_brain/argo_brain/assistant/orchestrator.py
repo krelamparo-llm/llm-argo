@@ -270,11 +270,27 @@ class ArgoAssistant:
 RESEARCH FRAMEWORK (Planning-First Architecture):
 
 PHASE 1: PLANNING
-First response: Provide ONLY a research plan in <research_plan> tags:
-- Research question breakdown: What sub-questions must be answered?
-- Search strategy: What keywords/phrases will find authoritative sources?
-- Success criteria: What specific information would fully answer the question?
-- Expected sources: What types of sources are most relevant (academic, industry, documentation)?
+IMPORTANT: Output ONLY a research plan using this exact format (simple text, NO nested XML):
+
+<research_plan>
+Research question: [Your question here]
+
+Sub-questions:
+- [Question 1]
+- [Question 2]
+
+Search strategy:
+- [Search terms]
+
+Success criteria:
+- [What would fully answer this]
+
+Expected sources:
+- [Source types needed]
+</research_plan>
+
+MUST complete the closing tag: </research_plan>
+DO NOT use nested XML tags inside the plan.
 
 PHASE 2: EXECUTION
 CRITICAL: You MUST use tools via {tool_format_label}. Do NOT answer from memory.
@@ -597,10 +613,24 @@ Remember: Your summary will be retrieved later via semantic search, so include r
         return "\n".join(lines) if lines else None
 
     def _extract_xml_tag(self, text: str, tag: str) -> Optional[str]:
-        """Extract content from XML tags like <research_plan>, <think>, etc."""
+        """Extract content from XML tags like <research_plan>, <think>, etc.
+
+        Handles truncated closing tags (e.g., </research_plan without the >).
+        """
+        # Try exact match first
         pattern = f"<{tag}>(.*?)</{tag}>"
         match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
-        return match.group(1).strip() if match else None
+        if match:
+            return match.group(1).strip()
+
+        # Fallback: Handle truncated closing tag (missing final >)
+        pattern_truncated = f"<{tag}>(.*?)</{tag}$"
+        match = re.search(pattern_truncated, text, flags=re.IGNORECASE | re.DOTALL)
+        if match:
+            self.logger.warning(f"Detected truncated closing tag for <{tag}>", extra={"tag": tag})
+            return match.group(1).strip()
+
+        return None
 
     def _split_think(self, response_text: str) -> tuple[Optional[str], str]:
         """Extract optional <think>...</think> content and return (think, final_text)."""
