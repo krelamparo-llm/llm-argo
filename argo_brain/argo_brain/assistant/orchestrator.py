@@ -23,6 +23,7 @@ from ..tools.base import Tool, ToolExecutionError, ToolRegistry, ToolRequest, To
 from ..utils.json_helpers import extract_json_object
 from ..utils.prompt_sanitizer import DEFAULT_SANITIZER, compute_prompt_stats
 from .tool_policy import ProposedToolCall, ToolPolicy
+from .research_tracker import ResearchStats
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are Argo, a personal AI running locally for Karl. Leverage only the provided system and user"
@@ -41,6 +42,13 @@ class AssistantResponse:
     raw_text: Optional[str] = None
     prompt_messages: Optional[List[ChatMessage]] = None
     tool_results: List[ToolResult] = field(default_factory=list)
+
+
+class ExecutionPath:
+    """Constants for tool execution path tracking."""
+    BATCH = "batch"
+    INDIVIDUAL = "individual"
+    PARALLEL = "parallel"
 
 
 class ArgoAssistant:
@@ -992,13 +1000,13 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 return None
 
             # Phase-aware tool filtering for RESEARCH mode
-            if not research_stats.get("has_plan"):
+            if not research_stats.has_plan:
                 # Planning phase: no tools needed yet (model should create plan first)
                 return []
-            elif research_stats.get("tool_calls", 0) < 10 and not research_stats.get("synthesis_triggered"):
+            elif research_stats.tool_calls < 10 and not research_stats.synthesis_triggered:
                 # Exploration phase: search and access only
                 return ["web_search", "web_access", "retrieve_context"]
-            elif research_stats.get("synthesis_triggered"):
+            elif research_stats.synthesis_triggered:
                 # Synthesis phase: allow memory storage
                 return ["memory_write", "memory_query", "retrieve_context"]
             else:
@@ -1069,15 +1077,8 @@ Remember: Your summary will be retrieved later via semantic search, so include r
         ]
 
         # Track research progress for RESEARCH mode
-        research_stats = {
-            "sources_fetched": 0,
-            "unique_urls": set(),
-            "tool_calls": 0,
-            "searches": 0,
-            "search_queries": [],
-            "has_plan": False,
-            "plan_text": None,
-        }
+        research_stats = ResearchStats()
+        research_stats.set_session(session_id)
 
         iterations = 0
         response_text = ""
@@ -1089,9 +1090,9 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             # Determine current phase for temperature calculation
             current_phase = "tool_call"  # Default
             if active_mode == SessionMode.RESEARCH:
-                if not research_stats["has_plan"]:
+                if not research_stats.has_plan:
                     current_phase = "planning"
-                elif research_stats.get("synthesis_triggered"):
+                elif research_stats.synthesis_triggered:
                     current_phase = "synthesis"
 
             # Calculate appropriate temperature for current mode and phase
@@ -1126,11 +1127,11 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             response_text = self._normalize_truncated_tags(response_text)
 
             # Extract research plan if present (RESEARCH mode)
-            if active_mode == SessionMode.RESEARCH and not research_stats["has_plan"]:
+            if active_mode == SessionMode.RESEARCH and not research_stats.has_plan:
                 plan = self._extract_xml_tag(response_text, "research_plan")
                 if plan:
-                    research_stats["has_plan"] = True
-                    research_stats["plan_text"] = plan
+                    research_stats.has_plan = True
+                    research_stats.plan_text = plan
                     self.logger.info("Research plan created", extra={"session_id": session_id, "plan_length": len(plan)})
 
                     # If plan was created but no tool call in same response, prompt for tool execution
@@ -1177,6 +1178,17 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     # Single tool - execute normally
                     results = [self._execute_single_tool(approved[0], session_id, user_message, active_mode)]
 
+                # Log execution path
+                self.logger.info(
+                    f"Executing {len(approved)} tools via batch path",
+                    extra={
+                        "session_id": session_id,
+                        "execution_path": ExecutionPath.BATCH,
+                        "tool_count": len(approved),
+                        "tool_names": [p.tool for p in approved]
+                    }
+                )
+
                 # Process results
                 for proposal, result in zip(approved, results):
                     if iterations >= max_tool_calls:
@@ -1185,20 +1197,16 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
                     tool_results_accum.append(result)
 
-                    # Track research progress
-                    research_stats["tool_calls"] += 1
-                    arguments = proposal.arguments or {}
-
-                    if proposal.tool == "web_search":
-                        research_stats["searches"] += 1
-                        query = arguments.get("query", user_message)
-                        research_stats["search_queries"].append(str(query))
-                    elif proposal.tool == "web_access":
-                        if result.metadata:
-                            url = result.metadata.get("url")
-                            if url:
-                                research_stats["unique_urls"].add(url)
-                                research_stats["sources_fetched"] += 1
+                    # Track research progress (centralized)
+                    if active_mode == SessionMode.RESEARCH:
+                        arguments = proposal.arguments or {}
+                        research_stats.track_tool_result(
+                            tool_name=proposal.tool,
+                            result=result,
+                            arguments=arguments,
+                            user_message=user_message,
+                            execution_path=ExecutionPath.BATCH
+                        )
 
                 # Apply conversation compaction if we have many tool results (Phase 2)
                 # This prevents context overflow in long research sessions
@@ -1241,7 +1249,7 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 for result in results_for_prompt:
                     result_msg = self._format_tool_result_for_prompt(result, active_mode)
                     if active_mode == SessionMode.RESEARCH:
-                        result_msg += self._format_research_progress(research_stats)
+                        result_msg += self._format_research_progress(research_stats.to_dict())
                     extra_messages.append(ChatMessage(role="system", content=result_msg))
                 if approved:
                     continue
@@ -1258,6 +1266,18 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     else arguments.get("url")
                 )
                 query_value = query_arg or user_message
+
+                # Log execution path
+                self.logger.info(
+                    f"Executing tool via individual path",
+                    extra={
+                        "session_id": session_id,
+                        "execution_path": ExecutionPath.INDIVIDUAL,
+                        "tool_name": tool_name,
+                        "iteration": iterations
+                    }
+                )
+
                 result = self.run_tool(
                     tool_name,
                     session_id,
@@ -1267,19 +1287,15 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 )
                 tool_results_accum.append(result)
 
-                # Track research progress (same as batch execution path)
+                # Track research progress (centralized)
                 if active_mode == SessionMode.RESEARCH:
-                    research_stats["tool_calls"] += 1
-                    if tool_name == "web_search":
-                        research_stats["searches"] += 1
-                        query = arguments.get("query", user_message)
-                        research_stats["search_queries"].append(str(query))
-                    elif tool_name == "web_access":
-                        if result.metadata:
-                            url = result.metadata.get("url")
-                            if url:
-                                research_stats["unique_urls"].add(url)
-                                research_stats["sources_fetched"] += 1
+                    research_stats.track_tool_result(
+                        tool_name=tool_name,
+                        result=result,
+                        arguments=arguments,
+                        user_message=user_message,
+                        execution_path=ExecutionPath.INDIVIDUAL
+                    )
 
                 context = self.memory_manager.get_context_for_prompt(
                     session_id,
@@ -1298,45 +1314,40 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
             # Research mode: trigger explicit synthesis after tool execution
             # Only trigger when stopping conditions are met (plan exists + 3+ sources)
-            if active_mode == SessionMode.RESEARCH and not research_stats.get("synthesis_triggered"):
-                has_plan = research_stats.get("has_plan", False)
-                sources_count = len(research_stats.get("unique_urls", set()))
+            if active_mode == SessionMode.RESEARCH and research_stats.should_trigger_synthesis():
+                research_stats.synthesis_triggered = True
 
-                # Check if stopping conditions are met
-                if has_plan and sources_count >= 3:
-                    research_stats["synthesis_triggered"] = True
+                # Add explicit synthesis request
+                synthesis_prompt = (
+                    "All research tools have been executed. You now have sufficient information to answer.\n\n"
+                    "CRITICAL: You MUST now provide your final synthesis following this EXACT structure:\n\n"
+                    "<synthesis>\n"
+                    "[Comprehensive answer to the research question, incorporating findings from all sources]\n"
+                    "[Use proper citations: cite sources as [1], [2], etc. matching the URLs from tool results]\n"
+                    "[Address all aspects of the original question]\n"
+                    "[Compare and contrast information from different sources if relevant]\n"
+                    "</synthesis>\n\n"
+                    "<confidence>0.0-1.0</confidence>\n\n"
+                    "<gaps>\n"
+                    "[List any limitations, uncertainties, or areas where more research would be needed]\n"
+                    "[Note: If no significant gaps, write \"None identified based on available sources\"]\n"
+                    "</gaps>\n\n"
+                    "DO NOT request more tools. DO NOT output tool calls. ONLY provide the synthesis structure above."
+                )
 
-                    # Add explicit synthesis request
-                    synthesis_prompt = (
-                        "All research tools have been executed. You now have sufficient information to answer.\n\n"
-                        "CRITICAL: You MUST now provide your final synthesis following this EXACT structure:\n\n"
-                        "<synthesis>\n"
-                        "[Comprehensive answer to the research question, incorporating findings from all sources]\n"
-                        "[Use proper citations: cite sources as [1], [2], etc. matching the URLs from tool results]\n"
-                        "[Address all aspects of the original question]\n"
-                        "[Compare and contrast information from different sources if relevant]\n"
-                        "</synthesis>\n\n"
-                        "<confidence>0.0-1.0</confidence>\n\n"
-                        "<gaps>\n"
-                        "[List any limitations, uncertainties, or areas where more research would be needed]\n"
-                        "[Note: If no significant gaps, write \"None identified based on available sources\"]\n"
-                        "</gaps>\n\n"
-                        "DO NOT request more tools. DO NOT output tool calls. ONLY provide the synthesis structure above."
-                    )
+                extra_messages.append(ChatMessage(role="system", content=synthesis_prompt))
+                self.logger.info("Triggering synthesis phase after tool execution", extra={"session_id": session_id})
 
-                    extra_messages.append(ChatMessage(role="system", content=synthesis_prompt))
-                    self.logger.info("Triggering synthesis phase after tool execution", extra={"session_id": session_id})
+                # NOTE: Extended thinking for synthesis (Anthropic best practice)
+                # This is currently a placeholder since llama.cpp doesn't support extended thinking.
+                # For Claude via API, this would be:
+                # extra_payload = {"thinking": {"type": "enabled", "budget_tokens": 2000}}
+                # For now, we rely on:
+                # 1. Higher temperature (0.7) for creative synthesis (set via phase detection)
+                # 2. Explicit <think> tags in the prompt (if model supports them)
+                # 3. Comprehensive synthesis instructions above
 
-                    # NOTE: Extended thinking for synthesis (Anthropic best practice)
-                    # This is currently a placeholder since llama.cpp doesn't support extended thinking.
-                    # For Claude via API, this would be:
-                    # extra_payload = {"thinking": {"type": "enabled", "budget_tokens": 2000}}
-                    # For now, we rely on:
-                    # 1. Higher temperature (0.7) for creative synthesis (set via phase detection)
-                    # 2. Explicit <think> tags in the prompt (if model supports them)
-                    # 3. Comprehensive synthesis instructions above
-
-                    continue  # One more LLM call for synthesis
+                continue  # One more LLM call for synthesis
 
             # QUICK_LOOKUP mode: if model responded but didn't make tool call, prompt for it
             # This handles cases where the model says "I need to search..." without actually calling the tool
@@ -1369,7 +1380,7 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
             # No tool call detected - handle based on mode
             # In research mode with a plan, retry more aggressively before giving up
-            if active_mode == SessionMode.RESEARCH and research_stats["has_plan"] and research_stats["tool_calls"] == 0 and iterations < 3:
+            if active_mode == SessionMode.RESEARCH and research_stats.has_plan and research_stats.tool_calls == 0 and iterations < 3:
                 retry_prompt = (
                     "CRITICAL ERROR: You created a research plan but have not executed ANY tools yet.\n\n"
                     "You MUST now output a tool call to execute your first search from the plan.\n\n"
@@ -1386,14 +1397,14 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
             # For other modes or after retries exhausted, exit
             if active_mode == SessionMode.RESEARCH:
-                sources_count = len(research_stats.get("unique_urls", set()))
                 self.logger.info(
                     "RESEARCH mode exiting",
                     extra={
                         "session_id": session_id,
-                        "has_plan": research_stats.get("has_plan", False),
-                        "sources_count": sources_count,
-                        "synthesis_triggered": research_stats.get("synthesis_triggered", False)
+                        "has_plan": research_stats.has_plan,
+                        "sources_count": research_stats.get_sources_count(),
+                        "synthesis_triggered": research_stats.synthesis_triggered,
+                        "research_stats": research_stats.to_dict()
                     }
                 )
             else:
@@ -1404,7 +1415,7 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                         "iterations": iterations,
                         "response_preview": response_text[:200],
                         "tool_results_count": len(tool_results_accum),
-                        "research_has_plan": research_stats.get("has_plan", False) if active_mode == SessionMode.RESEARCH else None
+                        "research_has_plan": research_stats.has_plan if active_mode == SessionMode.RESEARCH else None
                     }
                 )
             break
@@ -1427,8 +1438,8 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
         # Include research plan in raw_text if it exists (RESEARCH mode), but avoid duplication
         full_raw_text = response_text
-        if active_mode == SessionMode.RESEARCH and research_stats.get("plan_text"):
-            plan_text = research_stats["plan_text"]
+        if active_mode == SessionMode.RESEARCH and research_stats.plan_text:
+            plan_text = research_stats.plan_text
             if "<research_plan" not in response_text.lower():
                 full_raw_text = f"<research_plan>\n{plan_text}\n</research_plan>\n\n{response_text}"
             else:

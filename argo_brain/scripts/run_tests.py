@@ -323,9 +323,77 @@ class TestRunner:
             return False, str(e)
 
     def _auto_validate(self, test_case: TestCase) -> bool:
-        """Basic auto-validation (not comprehensive)."""
-        # In auto mode, we just check it didn't crash
-        # Real validation requires human judgment
+        """
+        Auto-validation with strict checks for RESEARCH mode.
+
+        Returns:
+            True if test passed, False otherwise
+        """
+        # For research tests, apply strict validation
+        if test_case.mode == SessionMode.RESEARCH:
+            return self._validate_research_response(test_case)
+
+        # For other modes, basic validation (didn't crash)
+        return True
+
+    def _validate_research_response(self, test_case: TestCase) -> bool:
+        """
+        Strict validation for RESEARCH mode tests.
+
+        Checks:
+        - Research plan present
+        - Synthesis present
+        - Confidence score present
+        - Gaps assessment present
+        - Minimum output length (1000 chars for substantial synthesis)
+        - Multiple source citations (3+)
+
+        Returns:
+            True if all checks pass, False otherwise
+        """
+        # Read the debug file to get the full response
+        debug_file = Path(f"/tmp/test_{test_case.test_id.lower()}_response.txt")
+        if not debug_file.exists():
+            print(f"FAIL: Debug file not found at {debug_file}")
+            return False
+
+        response_text = debug_file.read_text()
+
+        # Required: Research plan
+        if "<research_plan>" not in response_text:
+            print("FAIL: Missing <research_plan> tag")
+            return False
+
+        # Required: Synthesis
+        if "<synthesis>" not in response_text:
+            print("FAIL: Missing <synthesis> tag - research incomplete")
+            return False
+
+        # Required: Confidence score
+        if "<confidence>" not in response_text:
+            print("FAIL: Missing <confidence> tag")
+            return False
+
+        # Required: Gaps assessment
+        if "<gaps>" not in response_text:
+            print("FAIL: Missing <gaps> tag")
+            return False
+
+        # Minimum output length (synthesis should be substantial)
+        if len(response_text) < 1000:
+            print(f"FAIL: Output too short ({len(response_text)} chars, expected 1000+)")
+            return False
+
+        # Check for multiple URLs/citations (should have fetched 3+)
+        import re
+        url_pattern = r'https?://[^\s<>"\')]+|www\.[^\s<>"\')]+|\[\d+\]'
+        urls_found = len(re.findall(url_pattern, response_text))
+        if urls_found < 3:
+            print(f"FAIL: Insufficient source citations (found {urls_found}, expected 3+)")
+            return False
+
+        # All checks passed
+        print("PASS: All research validation checks passed")
         return True
 
     def run_tests(self, test_ids: Optional[List[str]] = None, category: Optional[str] = None):
