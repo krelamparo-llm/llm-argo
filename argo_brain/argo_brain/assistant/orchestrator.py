@@ -24,6 +24,7 @@ from ..utils.json_helpers import extract_json_object
 from ..utils.prompt_sanitizer import DEFAULT_SANITIZER, compute_prompt_stats
 from .tool_policy import ProposedToolCall, ToolPolicy
 from .research_tracker import ResearchStats
+from ..logging_utils import LogTag, format_state_transition, format_llm_log
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are Argo, a personal AI running locally for Karl. Leverage only the provided system and user"
@@ -1178,16 +1179,14 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     # Single tool - execute normally
                     results = [self._execute_single_tool(approved[0], session_id, user_message, active_mode)]
 
-                # Log execution path
-                self.logger.info(
-                    f"Executing {len(approved)} tools via batch path",
-                    extra={
-                        "session_id": session_id,
-                        "execution_path": ExecutionPath.BATCH,
-                        "tool_count": len(approved),
-                        "tool_names": [p.tool for p in approved]
-                    }
-                )
+                # LLM-readable execution path log (compact, only in debug mode)
+                if CONFIG.debug.research_mode:
+                    msg = format_llm_log(
+                        LogTag.EXEC_BATCH,
+                        f"n={len(approved)}",
+                        context={"tools": ",".join(p.tool[:4] for p in approved)}  # First 4 chars
+                    )
+                    self.logger.debug(msg, extra={"session_id": session_id})
 
                 # Process results
                 for proposal, result in zip(approved, results):
@@ -1317,6 +1316,10 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             if active_mode == SessionMode.RESEARCH and research_stats.should_trigger_synthesis():
                 research_stats.synthesis_triggered = True
 
+                # LLM-readable state transition log (compact)
+                msg = format_state_transition("exec", "synth", f"{len(research_stats.unique_urls)}URL+plan")
+                self.logger.info(msg, extra={"session_id": session_id})
+
                 # Add explicit synthesis request
                 synthesis_prompt = (
                     "All research tools have been executed. You now have sufficient information to answer.\n\n"
@@ -1336,7 +1339,6 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 )
 
                 extra_messages.append(ChatMessage(role="system", content=synthesis_prompt))
-                self.logger.info("Triggering synthesis phase after tool execution", extra={"session_id": session_id})
 
                 # NOTE: Extended thinking for synthesis (Anthropic best practice)
                 # This is currently a placeholder since llama.cpp doesn't support extended thinking.

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from ..tools.base import ToolResult
 
 from ..config import CONFIG
+from ..logging_utils import LogTag, format_progress, format_decision
 
 
 @dataclass
@@ -85,16 +86,17 @@ class ResearchStats:
             query = arguments.get("query", user_message)
             self.search_queries.append(str(query))
 
-            # Only log in debug mode
+            # LLM-readable logging (compact, only in debug mode)
             if CONFIG.debug.research_mode:
-                self._logger.debug(
-                    f"Tracked web_search (path={execution_path})",
-                    extra={
-                        "session_id": self._session_id,
-                        "query": query,
-                        "execution_path": execution_path
-                    }
+                # Format: [R:SRCH] #2 (batch, q=...)
+                msg = format_progress(
+                    LogTag.RESEARCH_SEARCH,
+                    self.searches,
+                    total=3,  # Typical research has ~3 searches
+                    p=execution_path[:1],  # b or i
+                    q=query[:30]  # First 30 chars
                 )
+                self._logger.debug(msg, extra={"session_id": self._session_id})
 
         elif tool_name == "web_access":
             if result.metadata:
@@ -104,25 +106,19 @@ class ResearchStats:
                     self.unique_urls.add(url)
                     self.sources_fetched += 1
 
-                    # Log if this is a NEW unique URL
+                    # Log NEW unique URLs (compact LLM-readable format)
                     if len(self.unique_urls) > before_count:
-                        # Always log new URLs at INFO level (important milestone)
-                        # But add extra detail in debug mode
-                        log_level = logging.INFO if not CONFIG.debug.research_mode else logging.DEBUG
-                        message = f"Added unique URL (total={len(self.unique_urls)}, path={execution_path})"
-                        if CONFIG.debug.research_mode:
-                            message += f" - url={url}"
-
-                        self._logger.log(
-                            log_level,
-                            message,
-                            extra={
-                                "session_id": self._session_id,
-                                "url": url if CONFIG.debug.research_mode else "<redacted>",
-                                "unique_count": len(self.unique_urls),
-                                "execution_path": execution_path
-                            }
+                        current = len(self.unique_urls)
+                        # Format: [R:URL] #3/3 ✓ (b) or [R:URL] #1/3 (i)
+                        msg = format_progress(
+                            LogTag.RESEARCH_URL,
+                            current,
+                            total=3,  # Need 3+ for synthesis
+                            p=execution_path[:1]  # b or i
                         )
+
+                        # Always log URLs at INFO (milestone), but keep it compact
+                        self._logger.info(msg, extra={"session_id": self._session_id})
 
     def should_trigger_synthesis(self) -> bool:
         """
@@ -133,11 +129,26 @@ class ResearchStats:
         - At least 3 unique URLs have been fetched
         - Synthesis hasn't been triggered yet
         """
-        return (
+        should_trigger = (
             self.has_plan
             and len(self.unique_urls) >= 3
             and not self.synthesis_triggered
         )
+
+        # Log decision (compact format, only when False or in debug mode)
+        if CONFIG.debug.research_mode or not should_trigger:
+            # Format: [D:] synth=Y (p=Y,u=3) or [D:] synth=N (p=N,u=2)
+            msg = format_decision(
+                "synth",
+                should_trigger,
+                p="Y" if self.has_plan else "N",
+                u=f"{len(self.unique_urls)}",
+                t="Y" if self.synthesis_triggered else "N"
+            )
+            log_level = logging.DEBUG if should_trigger else logging.INFO
+            self._logger.log(log_level, msg, extra={"session_id": self._session_id})
+
+        return should_trigger
 
     def get_phase(self) -> str:
         """
