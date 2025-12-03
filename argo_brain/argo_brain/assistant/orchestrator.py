@@ -982,6 +982,33 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             "User message received",
             extra={"session_id": session_id, "chars": len(user_message)},
         )
+
+        # Guard-rail: empty or whitespace-only prompts should not hit the LLM
+        if not user_message or not user_message.strip():
+            context = self.memory_manager.get_context_for_prompt(
+                session_id,
+                user_message,
+                tool_results=[],
+            )
+            final_text = (
+                "I didn't get a question or request. What would you like help with?"
+                " You can ask me to look something up, summarize a topic, or tackle a task."
+            )
+
+            # Record turn and extract memories to keep conversation state consistent
+            self.session_manager.record_turn(session_id, user_message, final_text)
+            recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+            self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+
+            return AssistantResponse(
+                text=final_text,
+                context=context,
+                thought=None,
+                raw_text=final_text,
+                prompt_messages=None,
+                tool_results=[],
+            )
+
         tool_results_accum = list(tool_results or [])
         context = self.memory_manager.get_context_for_prompt(
             session_id,
