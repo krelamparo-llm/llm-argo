@@ -617,6 +617,9 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
         Handles truncated closing tags (e.g., </research_plan without the >).
         """
+        # Normalize common truncation cases before extraction
+        text = self._normalize_truncated_tags(text)
+
         # Try exact match first
         pattern = f"<{tag}>(.*?)</{tag}>"
         match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
@@ -624,7 +627,7 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             return match.group(1).strip()
 
         # Fallback: Handle truncated closing tag (missing final >)
-        pattern_truncated = f"<{tag}>(.*?)</{tag}$"
+        pattern_truncated = f"<{tag}>(.*?)</{tag}\\s*$"
         match = re.search(pattern_truncated, text, flags=re.IGNORECASE | re.DOTALL)
         if match:
             self.logger.warning(f"Detected truncated closing tag for <{tag}>", extra={"tag": tag})
@@ -1111,6 +1114,9 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 temperature=temperature
             )
 
+            # Normalize occasional truncated closing tags to keep parsing stable.
+            response_text = self._normalize_truncated_tags(response_text)
+
             # Extract research plan if present (RESEARCH mode)
             if active_mode == SessionMode.RESEARCH and not research_stats["has_plan"]:
                 plan = self._extract_xml_tag(response_text, "research_plan")
@@ -1367,6 +1373,51 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             prompt_messages=prompt_messages if return_prompt else None,
             tool_results=tool_results_accum,
         )
+
+    def _normalize_truncated_tags(self, text: str) -> str:
+        """Fix cases where the model omits the closing '>' on XML-ish tags.
+
+        When the model stops early we sometimes see '</research_plan' or
+        '</synthesis' without the final '>'. This helper patches those so
+        downstream parsing remains reliable.
+        """
+        if not text:
+            return text
+
+        tags = ("research_plan", "synthesis", "confidence", "gaps")
+        fixed = text
+        truncated_tags = []
+        for tag in tags:
+            pattern = rf"</{tag}\s*(?=$|\r|\n)"
+            # Add missing '>' when the closing tag is truncated at end-of-line/string.
+            fixed, count = re.subn(
+                pattern,
+                f"</{tag}>",
+                fixed,
+                flags=re.IGNORECASE,
+            )
+            if count:
+                truncated_tags.append({"tag": tag, "count": count})
+
+            # If opening tag exists but closing tag is missing entirely,
+            # append a closing tag to keep downstream parsing stable.
+            open_count = len(re.findall(rf"<{tag}>", fixed, flags=re.IGNORECASE))
+            close_count = len(re.findall(rf"</{tag}>", fixed, flags=re.IGNORECASE))
+            if open_count and close_count < open_count:
+                missing = open_count - close_count
+                self.logger.warning(
+                    "Auto-closing truncated tag",
+                    extra={"tag": tag, "open": open_count, "close": close_count},
+                )
+                fixed = fixed.rstrip() + "".join(f"\n</{tag}>" for _ in range(missing)) + "\n"
+
+        if truncated_tags:
+            preview = fixed[:200].replace("\n", "\\n")
+            self.logger.warning(
+                "Normalized truncated closing tags",
+                extra={"patched": truncated_tags, "preview": preview},
+            )
+        return fixed
 
     def list_profile_facts(self) -> str:
         """Return a formatted string of stored profile facts."""
