@@ -59,7 +59,8 @@ with open(log_file) as f:
 
         # Tool execution with output length
         if "Tool execution completed" in line:
-            tool_match = re.search(r"tool_name=(\w+)", line)
+            # Match both tool= and tool_name= for compatibility (log_setup uses tool=)
+            tool_match = re.search(r"tool=(\w+)", line) or re.search(r"tool_name=(\w+)", line)
             output_match = re.search(r"output_length=(\d+)", line)
 
             if tool_match and output_match:
@@ -67,9 +68,9 @@ with open(log_file) as f:
                 output_len = int(output_match.group(1))
                 metrics["tool_executions"][tool_name].append(output_len)
 
-        # Parallel execution
-        if "Executing" in line and "parallel" in line:
-            count_match = re.search(r"Executing (\d+) tools", line)
+        # Parallel execution - match "X tools in parallel"
+        if "tools in parallel" in line:
+            count_match = re.search(r"Executing (\d+) tools? in parallel", line)
             if count_match:
                 metrics["parallel_executions"].append(int(count_match.group(1)))
 

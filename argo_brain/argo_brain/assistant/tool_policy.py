@@ -78,10 +78,21 @@ class ToolPolicy:
         Checks:
         - Query length within bounds (min 2, max 500 chars)
         - max_results capped at configured limit
+        - No dangerous patterns (file:// URLs, path traversal, etc.)
         """
         query = arguments.get("query", "")
         if not isinstance(query, str):
             return False, "web_search query must be a string", arguments
+
+        # Check for dangerous patterns that shouldn't be searched
+        dangerous_patterns = [
+            (r'file:///', "Local file URLs (file:///) are not supported"),
+            (r'\\\\[a-zA-Z]', "UNC network paths (\\\\) are not supported"),
+            (r'\.\./', "Path traversal patterns are not allowed"),
+        ]
+        for pattern, message in dangerous_patterns:
+            if re.search(pattern, query, re.IGNORECASE):
+                return False, f"Query rejected: {message}", arguments
 
         min_len = self.config.security.web_search_min_query_length
         max_len = self.config.security.web_search_max_query_length

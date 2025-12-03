@@ -381,6 +381,13 @@ WHEN NOT TO USE TOOLS:
 ✗ General knowledge question from your training data
 ✗ User asks about past conversations (use context)
 
+AMBIGUITY DETECTION:
+If the query contains vague references without clear context:
+✗ "that thing", "it", "this", "the stuff we discussed"
+✗ Pronouns without clear antecedents in the current query
+→ Ask for clarification: "What specifically would you like to know about?"
+→ DO NOT guess from session context if the reference is genuinely ambiguous
+
 TOOL REQUEST FORMAT (use EXACTLY this, nothing else):
 {tool_format_example}
 
