@@ -198,6 +198,35 @@ def test_dynamic_tool_availability():
     print("=" * 80)
 
 
+def test_max_tool_calls_per_mode():
+    """Test per-mode tool call limits."""
+    print("\n" + "=" * 80)
+    print("TEST 5b: Max Tool Calls Per Mode")
+    print("=" * 80)
+
+    assistant = ArgoAssistant()
+
+    print("\nMax tool calls by mode:")
+    max_quick = assistant._get_max_tool_calls_for_mode(SessionMode.QUICK_LOOKUP)
+    max_research = assistant._get_max_tool_calls_for_mode(SessionMode.RESEARCH)
+    max_ingest = assistant._get_max_tool_calls_for_mode(SessionMode.INGEST)
+
+    print(f"  QUICK_LOOKUP: {max_quick}")
+    print(f"  RESEARCH: {max_research}")
+    print(f"  INGEST: {max_ingest}")
+
+    assert max_quick == 2, f"QUICK_LOOKUP max_tool_calls should be 2, got {max_quick}"
+    assert max_research == 10, f"RESEARCH max_tool_calls should be 10, got {max_research}"
+    assert max_ingest == 3, f"INGEST max_tool_calls should be 3, got {max_ingest}"
+    assert max_quick < max_ingest < max_research, "RESEARCH should allow most tool calls"
+
+    print("  ✓ QUICK_LOOKUP (2) < INGEST (3) < RESEARCH (10)")
+
+    print("\n" + "=" * 80)
+    print("TEST 5b: PASSED ✓")
+    print("=" * 80)
+
+
 def test_tool_registry_filtering():
     """Test that ToolRegistry.manifest() supports filtering."""
     print("\n" + "=" * 80)
@@ -251,6 +280,7 @@ def main():
         test_temperature_schedules()
         test_max_tokens()
         test_dynamic_tool_availability()
+        test_max_tool_calls_per_mode()
         test_tool_registry_filtering()
 
         print("\n" + "=" * 80)
@@ -261,6 +291,7 @@ def main():
         print("  ✓ Progressive temperature schedules")
         print("  ✓ Mode-specific max_tokens")
         print("  ✓ Dynamic tool availability (5 configurations)")
+        print("  ✓ Per-mode max_tool_calls limits")
         print("  ✓ ToolRegistry filtering support")
         print("\nImplementation is ready for production testing!")
         print("=" * 80)
