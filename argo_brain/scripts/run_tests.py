@@ -255,6 +255,16 @@ class TestRunner:
                     if response.raw_text:
                         print("[Full response with tags]:")
                         print(response.raw_text)
+
+                        # In verbose mode, also save to file for debugging
+                        if self.verbose:
+                            debug_file = Path(f"/tmp/test_{test_case.test_id.lower()}_response.txt")
+                            with open(debug_file, "w") as f:
+                                f.write(f"Test: {test_case.test_id}\n")
+                                f.write(f"Input: {user_input}\n\n")
+                                f.write("="*80 + "\n")
+                                f.write(response.raw_text)
+                            print(f"[Response saved to: {debug_file}]")
                     else:
                         # Fallback to cleaned text
                         response_text = response.text if response.text else "(empty response)"
@@ -332,12 +342,41 @@ class TestRunner:
             passed, reason = self.run_test(test_case)
             self.results.append((test_case.test_id, passed, reason))
 
+            # Save results after each test (incremental saving)
+            self._save_results()
+            if self.verbose:
+                print(f"[Saved results after {test_case.test_id}]")
+
             # Pause between tests in interactive mode
             if not self.auto_mode and test_case != tests_to_run[-1]:
                 input("\nPress Enter to continue to next test...")
 
         # Print summary
         self.print_summary()
+
+    def _save_results(self):
+        """Save current results to file (called after each test)."""
+        results_file = Path("test_results.json")
+        passed = [r for r in self.results if r[1]]
+        failed = [r for r in self.results if not r[1]]
+
+        results_data = {
+            "timestamp": time.time(),
+            "total": len(self.results),
+            "passed": len(passed),
+            "failed": len(failed),
+            "results": [
+                {
+                    "test_id": test_id,
+                    "passed": passed_flag,
+                    "reason": reason
+                }
+                for test_id, passed_flag, reason in self.results
+            ]
+        }
+
+        with open(results_file, "w") as f:
+            json.dump(results_data, f, indent=2)
 
     def print_summary(self):
         """Print test results summary."""
@@ -359,27 +398,9 @@ class TestRunner:
                 print(f"  ✗ {test_id}: {reason or 'No reason given'}")
             print()
 
-        # Save results to file
-        results_file = Path("test_results.json")
-        results_data = {
-            "timestamp": time.time(),
-            "total": len(self.results),
-            "passed": len(passed),
-            "failed": len(failed),
-            "results": [
-                {
-                    "test_id": test_id,
-                    "passed": passed_flag,
-                    "reason": reason
-                }
-                for test_id, passed_flag, reason in self.results
-            ]
-        }
-
-        with open(results_file, "w") as f:
-            json.dump(results_data, f, indent=2)
-
-        print(f"Results saved to: {results_file}")
+        # Save results to file (final save)
+        self._save_results()
+        print(f"Results saved to: test_results.json")
 
 
 def main():

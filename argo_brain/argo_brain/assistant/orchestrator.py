@@ -502,9 +502,13 @@ Continue researching until ALL stopping conditions are met. Resist premature con
             return None
         return {"plan": plan_text, "proposals": proposals}
 
-    def _format_tool_result_for_prompt(self, result: ToolResult) -> str:
-        metadata_preview = json.dumps(result.metadata, ensure_ascii=False)[:800]
-        content_preview = (result.content or "")[:1200]
+    def _format_tool_result_for_prompt(self, result: ToolResult, mode: SessionMode = SessionMode.QUICK_LOOKUP) -> str:
+        # More aggressive truncation in research mode to save context
+        max_content = 800 if mode == SessionMode.RESEARCH else 1200
+        max_metadata = 400 if mode == SessionMode.RESEARCH else 800
+
+        metadata_preview = json.dumps(result.metadata, ensure_ascii=False)[:max_metadata]
+        content_preview = (result.content or "")[:max_content]
         return (
             f"Tool {result.tool_name} result summary: {result.summary}\n"
             f"Content:\n{content_preview}\n"
@@ -668,7 +672,7 @@ Continue researching until ALL stopping conditions are met. Resist premature con
             tool_results=tool_results_accum,
         )
         extra_messages: List[ChatMessage] = [
-            ChatMessage(role="system", content=self._format_tool_result_for_prompt(result))
+            ChatMessage(role="system", content=self._format_tool_result_for_prompt(result, active_mode))
             for result in tool_results_accum
         ]
 
@@ -764,7 +768,7 @@ Continue researching until ALL stopping conditions are met. Resist premature con
 
                 # Apply conversation compaction if we have many tool results (Phase 2)
                 # This prevents context overflow in long research sessions
-                COMPACTION_THRESHOLD = 6  # Compress after 6+ tool results
+                COMPACTION_THRESHOLD = 4 if active_mode == SessionMode.RESEARCH else 6  # More aggressive in research mode
                 if len(tool_results_accum) >= COMPACTION_THRESHOLD:
                     compression_summary, compressed_results = self._compress_tool_results(
                         tool_results_accum, keep_recent=3
@@ -801,7 +805,7 @@ Continue researching until ALL stopping conditions are met. Resist premature con
 
                 # Add all tool results (using compacted set if applicable)
                 for result in results_for_prompt:
-                    result_msg = self._format_tool_result_for_prompt(result)
+                    result_msg = self._format_tool_result_for_prompt(result, active_mode)
                     if active_mode == SessionMode.RESEARCH:
                         result_msg += self._format_research_progress(research_stats)
                     extra_messages.append(ChatMessage(role="system", content=result_msg))
@@ -838,7 +842,7 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                 extra_messages.append(
                     ChatMessage(
                         role="system",
-                        content=self._format_tool_result_for_prompt(result),
+                        content=self._format_tool_result_for_prompt(result, active_mode),
                     )
                 )
                 continue
@@ -871,6 +875,33 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                     self.logger.info("Triggering synthesis phase after tool execution", extra={"session_id": session_id})
                     continue  # One more LLM call for synthesis
 
+            # QUICK_LOOKUP mode: if model responded but didn't make tool call, prompt for it
+            # This handles cases where the model says "Let me search..." without actually calling the tool
+            if active_mode == SessionMode.QUICK_LOOKUP and iterations == 0 and len(tool_results_accum) == 0:
+                # Check if response suggests intent to use tools but didn't call any
+                response_lower = response_text.lower()
+                tool_intent_keywords = ["let me", "i'll", "i will", "searching for", "looking for", "finding"]
+                has_tool_intent = any(keyword in response_lower for keyword in tool_intent_keywords)
+
+                if has_tool_intent:
+                    prompt_for_tools = (
+                        "Please proceed with the tool call now. Output the tool call immediately using the correct format.\n\n"
+                        "Do NOT explain what you will do - just make the tool call."
+                    )
+                    extra_messages.append(ChatMessage(role="system", content=prompt_for_tools))
+                    self.logger.info("Prompting for tool execution in QUICK_LOOKUP mode", extra={"session_id": session_id})
+                    continue  # Continue loop to get tool call
+
+            # No tool call detected and no recovery possible - log and exit
+            self.logger.warning(
+                "Conversation loop exiting without tool call",
+                extra={
+                    "session_id": session_id,
+                    "iterations": iterations,
+                    "response_preview": response_text[:200],
+                    "tool_results_count": len(tool_results_accum)
+                }
+            )
             break
 
         thought, final_text = self._split_think(response_text)
@@ -888,11 +919,18 @@ Continue researching until ALL stopping conditions are met. Resist premature con
             "Assistant completed response",
             extra={"session_id": session_id, "tool_runs": len(tool_results_accum)},
         )
+
+        # Include research plan in raw_text if it exists (RESEARCH mode)
+        full_raw_text = response_text
+        if active_mode == SessionMode.RESEARCH and research_stats.get("plan_text"):
+            plan_text = research_stats["plan_text"]
+            full_raw_text = f"<research_plan>\n{plan_text}\n</research_plan>\n\n{response_text}"
+
         return AssistantResponse(
             text=final_text,
             context=context,
             thought=thought,
-            raw_text=response_text,
+            raw_text=full_raw_text,
             prompt_messages=prompt_messages if return_prompt else None,
             tool_results=tool_results_accum,
         )
