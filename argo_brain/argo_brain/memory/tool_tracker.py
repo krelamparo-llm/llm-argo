@@ -46,7 +46,8 @@ class ToolTracker:
         self.logger.info(
             "Tool execution completed",
             extra={
-                "tool_name": result.tool_name,
+                "tool": result.tool_name,  # Changed from tool_name to tool (matches log_setup.py formatter)
+                "tool_name": result.tool_name,  # Keep both for compatibility
                 "session_id": session_id,
                 "input_length": len(request.query),
                 "output_length": len(result.content) if result.content else 0,

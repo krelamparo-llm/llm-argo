@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 import logging
@@ -151,6 +152,101 @@ class LLMClient:
         )
 
         try:
-            return data["choices"][0]["message"]["content"].strip()
+            choice = data["choices"][0]
+            message = choice["message"]
+            content = message.get("content")
+            tool_calls = message.get("tool_calls")
+            finish_reason = choice.get("finish_reason")
+
+            # Handle native function calling (OpenAI-style)
+            if content is None and tool_calls and finish_reason == "tool_calls":
+                # Model is using native function calling - convert to Argo's XML format
+                self.logger.debug(
+                    "Model used native function calling, converting to XML",
+                    extra={"tool_calls_count": len(tool_calls)}
+                )
+
+                # Convert tool_calls to XML format that Argo expects
+                xml_calls = []
+                for tc in tool_calls:
+                    func = tc.get("function", {})
+                    func_name = func.get("name", "unknown")
+                    # Arguments are JSON string, parse them
+                    try:
+                        args = json.loads(func.get("arguments", "{}"))
+                    except json.JSONDecodeError:
+                        args = {}
+
+                    # Build XML format
+                    xml = f"<tool_call>\n<function={func_name}>\n"
+                    for key, value in args.items():
+                        xml += f"<parameter={key}>\n{value}\n</parameter>\n"
+                    xml += "</function>\n</tool_call>"
+                    xml_calls.append(xml)
+
+                converted = "\n\n".join(xml_calls)
+                self.logger.debug(f"Converted tool calls to XML: {converted[:200]}")
+                return converted
+
+            if content is None:
+                # Log detailed info about why content is None
+                self.logger.warning(
+                    "LLM returned None content",
+                    extra={
+                        "finish_reason": finish_reason,
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "has_tool_calls": bool(tool_calls),
+                        "full_choice": choice,
+                    }
+                )
+
+                # Common causes and hints
+                if finish_reason == "length":
+                    self.logger.warning("Content is None because max_tokens was reached with no output")
+                elif completion_tokens == 0:
+                    self.logger.warning(
+                        "Content is None because model generated 0 tokens (possible prompt issue). "
+                        "This usually means the prompt format confused the model or it hit a stop token immediately."
+                    )
+
+                # Log the prompt that caused this issue (for debugging)
+                msg_list = [message.__dict__ for message in messages]
+                self.logger.debug(
+                    "Prompt that resulted in None content",
+                    extra={
+                        "messages": msg_list[:3],  # First 3 messages (system, context, etc)
+                        "messages_count": len(msg_list),
+                        "last_message": msg_list[-1] if msg_list else None,  # The actual user query
+                    }
+                )
+
+                # Also write to a debug file for easy inspection
+                try:
+                    debug_file = Path("/tmp/argo_none_content_debug.json")
+                    debug_data = {
+                        "finish_reason": finish_reason,
+                        "prompt_tokens": prompt_tokens,
+                        "completion_tokens": completion_tokens,
+                        "messages": [
+                            {
+                                "role": m.get("role"),
+                                "content": m.get("content", "")[:500]  # First 500 chars of each message
+                            }
+                            for m in msg_list
+                        ],
+                        "full_response": choice,
+                    }
+                    with open(debug_file, "w") as f:
+                        json.dump(debug_data, f, indent=2)
+                    self.logger.warning(f"Debug info written to {debug_file}")
+                    print(f"\n[DEBUG] Prompt debug info saved to: {debug_file}")
+                    print(f"[DEBUG] This shows the prompt that caused the LLM to return None")
+                    print(f"[DEBUG] finish_reason={finish_reason}, completion_tokens={completion_tokens}\n")
+                except Exception as e:
+                    self.logger.debug(f"Could not write debug file: {e}")
+
+                return ""
+            return content.strip()
         except (KeyError, IndexError) as exc:
             raise RuntimeError(f"Unexpected LLM response: {data}") from exc

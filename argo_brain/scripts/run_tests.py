@@ -244,17 +244,26 @@ class TestRunner:
                 # Send message to assistant
                 try:
                     response = self.assistant.send_message(
-                        message=user_input,
+                        user_message=user_input,
                         session_id=session_id,
-                        mode=test_case.mode
+                        session_mode=test_case.mode
                     )
 
                     print("Assistant response:")
-                    print(response.text)
+
+                    # Show raw text if available (includes <research_plan>, <think>, etc.)
+                    if response.raw_text:
+                        print("[Full response with tags]:")
+                        print(response.raw_text)
+                    else:
+                        # Fallback to cleaned text
+                        response_text = response.text if response.text else "(empty response)"
+                        print(response_text)
                     print()
 
                     if response.tool_results:
-                        print(f"Tools executed: {[tr.metadata.get('tool', 'unknown') for tr in response.tool_results]}")
+                        tool_names = [tr.tool_name for tr in response.tool_results]
+                        print(f"Tools executed: {tool_names}")
                         print()
 
                 except Exception as e:

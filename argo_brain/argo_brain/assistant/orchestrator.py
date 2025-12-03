@@ -998,7 +998,6 @@ Continue researching until ALL stopping conditions are met. Resist premature con
                         tool_name=proposals[index].tool,
                         summary=f"Tool execution failed: {exc}",
                         content="",
-                        error=f"Tool execution failed: {exc}",
                         metadata={"tool": proposals[index].tool, "error": str(exc)}
                     )
 
@@ -1024,6 +1023,22 @@ Continue researching until ALL stopping conditions are met. Resist premature con
             metadata=metadata or {},
             session_mode=session_mode,
         )
-        result = tool.run(request)
+
+        # Execute tool with error handling for network issues, etc.
+        try:
+            result = tool.run(request)
+        except ToolExecutionError as exc:
+            # Return error result instead of crashing
+            self.logger.warning(
+                f"Tool {tool_name} failed: {exc}",
+                extra={"session_id": session_id, "tool": tool_name, "error": str(exc)}
+            )
+            result = ToolResult(
+                tool_name=tool_name,
+                summary=f"Tool execution failed: {exc}",
+                content="",
+                metadata={"tool": tool_name, "error": str(exc)}
+            )
+
         self.tool_tracker.process_result(session_id, request, result)
         return result

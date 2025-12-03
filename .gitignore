@@ -16,3 +16,6 @@ __pycache__/
 
 # ignore .argo_data/ directory
 .argo_data/
+
+# test results
+test_results.json
