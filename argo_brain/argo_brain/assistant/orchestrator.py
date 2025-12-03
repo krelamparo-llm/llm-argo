@@ -181,19 +181,23 @@ class ArgoAssistant:
 
         Uses per-model configuration if available, otherwise falls back to defaults.
         """
-        # Try to use prompt config first
+        # Try to use prompt config first, but fallback if too short
         if hasattr(self, "prompt_config") and self.prompt_config:
             mode_key = session_mode.value.lower()  # "quick_lookup", "research", "ingest"
             mode_prompt = self.prompt_config.get_mode_prompt(mode_key)
+            # Only use YAML prompt if it's comprehensive (>1500 chars for non-RESEARCH, >3000 for RESEARCH)
             if mode_prompt:
-                return mode_prompt
+                min_length = 3000 if session_mode == SessionMode.RESEARCH else 1500
+                if len(mode_prompt) >= min_length:
+                    return mode_prompt
+                # Otherwise, fall through to use our comprehensive defaults
 
         # Fallback for modes not in config
         if session_mode == SessionMode.QUICK_LOOKUP:
-            return "You are in QUICK LOOKUP mode: answer concisely using available context."
+            return self._get_default_quick_lookup_prompt()
 
         if session_mode == SessionMode.INGEST:
-            return "You are in INGEST mode: help archive and summarize supplied material."
+            return self._get_default_ingest_prompt()
 
         # RESEARCH mode fallback with format-specific instructions
         return self._get_default_research_prompt()
@@ -304,18 +308,186 @@ FORMAT REQUIREMENTS:
 
 Continue researching until ALL stopping conditions are met. Resist premature conclusions."""
 
+    def _get_default_quick_lookup_prompt(self) -> str:
+        """Generate default quick lookup mode prompt with format-specific tool instructions."""
+        # Build format-specific instructions
+        if self.use_xml_format:
+            tool_format_example = """<tool_call>
+<function=web_search>
+<parameter=query>your search query here</parameter>
+</function>
+</tool_call>"""
+            tool_format_label = "XML"
+        else:
+            tool_format_example = '<tool_call>\n{"name": "web_search", "arguments": {"query": "your search query"}}\n</tool_call>'
+            tool_format_label = "JSON"
+
+        return f"""You are in QUICK LOOKUP mode: provide fast, concise answers with minimal tool usage.
+
+CRITICAL INSTRUCTION: If you don't have the answer in your training data or the provided context, you MUST make a tool call. Do NOT say "I would need to search" - ACTUALLY SEARCH by outputting a tool call.
+
+PRIORITY ORDER (Follow strictly):
+1. **Check context first** - If the answer is in the provided context (session summary, knowledge base, or web cache), cite it and answer immediately
+2. **Make tool call immediately if needed** - If context is insufficient or outdated, OUTPUT A TOOL CALL (don't explain, just do it)
+3. **Direct answer** - Provide answer immediately after tool result (no multi-phase research)
+
+TOOL USAGE GUIDELINES:
+- **Maximum**: 1 tool call per query (strictly enforced)
+- **Prefer memory_query** - Check if we've researched this before (faster than web search)
+- **Use web_search** - If topic is completely new or requires current information
+- **Format**: {tool_format_label}
+- **DO NOT SAY "I need to search"** - Just output the tool call
+
+WHEN TO USE TOOLS (immediately, no explanation):
+✓ Context doesn't contain the answer → OUTPUT web_search tool call
+✓ User asks about current/recent events (2024-2025) → OUTPUT web_search tool call
+✓ Technical details not in knowledge base → OUTPUT web_search tool call
+✓ Questions about specific versions, latest releases, recent news → OUTPUT web_search tool call
+
+WHEN NOT TO USE TOOLS:
+✗ Answer is clearly in the provided context
+✗ General knowledge question from your training data
+✗ User asks about past conversations (use context)
+
+TOOL REQUEST FORMAT (use EXACTLY this, nothing else):
+{tool_format_example}
+
+DO NOT write anything before or after the tool request.
+
+OUTPUT FORMAT:
+- Concise answers (2-4 sentences preferred, unless detail requested)
+- Cite sources when available: "According to [context/URL], ..."
+- No elaborate analysis unless specifically requested
+- If uncertain, state it briefly and answer with available info
+
+AVOID:
+- Multiple tool calls (max 1)
+- Long research processes (use RESEARCH mode for that)
+- Planning phases (answer directly)
+- Asking follow-up questions (answer with what you have)
+
+STOPPING CONDITIONS:
+✓ Answered from context (no tools needed), OR
+✓ Made 1 tool call and provided answer based on result
+
+Remember: Speed and conciseness are priorities. If you need deep research with multiple sources, suggest the user switch to RESEARCH mode."""
+
+    def _get_default_ingest_prompt(self) -> str:
+        """Generate default ingest mode prompt with format-specific tool instructions."""
+        # Build format-specific instructions
+        if self.use_xml_format:
+            tool_format_example = """<tool_call>
+<function=memory_write>
+<parameter=content>Your structured summary here</parameter>
+<parameter=metadata>{"tags": ["tag1", "tag2"], "source": "url"}</parameter>
+</function>
+</tool_call>"""
+            tool_format_label = "XML"
+        else:
+            tool_format_example = '<tool_call>\n{"name": "memory_write", "arguments": {"content": "summary", "metadata": {...}}}\n</tool_call>'
+            tool_format_label = "JSON"
+
+        return f"""You are in INGEST mode: archive and summarize user-provided material for future retrieval.
+
+WORKFLOW (Follow in order):
+
+STEP 1: ANALYZE PROVIDED MATERIAL
+- Read the user's provided material carefully (article, notes, data, etc.)
+- Identify the main topic and key information
+- Extract important details (URLs, dates, names, technical terms)
+- Note the source and context
+
+STEP 2: CREATE STRUCTURED SUMMARY
+Generate a well-structured summary in markdown format:
+
+```markdown
+# [Clear Topic Title]
+
+## Summary
+[2-3 paragraph overview of the main content - be comprehensive but concise]
+
+## Key Points
+- [Important fact or finding 1]
+- [Important fact or finding 2]
+- [Important fact or finding 3]
+[... continue as needed]
+
+## Important Details
+- **Source**: [URL or document name if available]
+- **Date**: [Relevant date - publication, research date, etc.]
+- **Author/Organization**: [If applicable]
+- **Context**: [Why this is relevant or was provided]
+
+## Technical Details (if applicable)
+- [Specific technical information]
+- [Code snippets, configurations, etc.]
+
+## Related Topics / Tags
+`tag1`, `tag2`, `tag3`, `tag4`
+[Use relevant keywords for future retrieval]
+```
+
+STEP 3: STORE TO MEMORY
+Use memory_write tool to store your summary:
+
+Tool format: {tool_format_label}
+Example:
+{tool_format_example}
+
+**CRITICAL**:
+- Content should be your STRUCTURED SUMMARY (not raw material)
+- Include metadata with tags, source URL, and timestamp
+- Tags should be keywords that help future retrieval
+
+STEP 4: CONFIRM INGESTION
+After storing, provide a brief confirmation:
+"✓ Material ingested and stored with tags: [tag1, tag2, tag3]
+
+Summary: [One-sentence overview]"
+
+GUIDELINES:
+- **Be comprehensive** - Capture all important information (no truncation)
+- **Be structured** - Use markdown formatting for clarity
+- **Be searchable** - Include keywords and tags that aid future retrieval
+- **Preserve context** - Note why this material matters
+- **Extract URLs** - Always include source URLs for citation
+- **Use consistent tags** - Technology names, concepts, dates, etc.
+
+OUTPUT STYLE:
+- Professional and clear
+- Well-organized with headings
+- Bullet points for easy scanning
+- Technical accuracy preserved
+- Future-you should understand this easily
+
+Remember: Your summary will be retrieved later via semantic search, so include relevant keywords and context that make it findable."""
+
     def build_prompt(
         self,
         context: MemoryContext,
         user_message: str,
         session_mode: SessionMode,
+        research_stats: Optional[Dict[str, Any]] = None,
     ) -> List[ChatMessage]:
-        """Construct chat messages for llama-server."""
+        """Construct chat messages for llama-server.
 
+        Args:
+            context: Memory context for the session
+            user_message: User's message
+            session_mode: Current session mode
+            research_stats: Optional research tracking stats (for phase-aware tool filtering)
+
+        Returns:
+            List of chat messages ready for LLM
+        """
         messages: List[ChatMessage] = [ChatMessage(role="system", content=self.system_prompt)]
-        manifest_text = self.tool_registry.manifest()
+
+        # Get available tools for current mode and phase
+        available_tools = self._get_available_tools_for_mode(session_mode, research_stats)
+        manifest_text = self.tool_registry.manifest(filter_tools=available_tools)
         if manifest_text and "No external tools" not in manifest_text:
             messages.append(ChatMessage(role="system", content=manifest_text))
+
         mode_description = self._get_mode_description(session_mode)
         messages.append(ChatMessage(role="system", content=mode_description))
         context_block = self._format_context_block(context)
@@ -648,6 +820,123 @@ Continue researching until ALL stopping conditions are met. Resist premature con
 
         return feedback
 
+    def _get_temperature_for_phase(
+        self,
+        session_mode: SessionMode,
+        phase: str,
+        has_tool_results: bool = False
+    ) -> float:
+        """Return appropriate temperature for mode and phase.
+
+        Follows Anthropic's recommendation: low temp for tool calls, higher for synthesis.
+
+        Args:
+            session_mode: Current session mode
+            phase: Current phase (planning, tool_call, answer, synthesis)
+            has_tool_results: Whether we've already received tool results
+
+        Returns:
+            Temperature value (0.0-1.0)
+        """
+        # Try to use model-specific config if available
+        model_default = 0.7
+        if hasattr(self, "prompt_config") and self.prompt_config:
+            model_default = self.prompt_config.sampling.temperature
+
+        # Mode and phase-specific temperature schedules
+        if session_mode == SessionMode.QUICK_LOOKUP:
+            if not has_tool_results:
+                # First response - try to answer from context or make single tool call
+                return 0.3  # Moderate - natural but focused
+            else:
+                # After tool result - provide final answer
+                return 0.5  # Balanced - natural and readable
+
+        elif session_mode == SessionMode.RESEARCH:
+            if phase == "planning":
+                return 0.4  # Structured but creative planning
+            elif phase == "synthesis":
+                return 0.7  # Creative, comprehensive synthesis
+            else:
+                # Tool calling phase
+                return 0.2  # Deterministic, focused tool selection
+
+        elif session_mode == SessionMode.INGEST:
+            return 0.5  # Structured but readable summaries
+
+        # Default fallback
+        return 0.5
+
+    def _get_max_tokens_for_mode(self, session_mode: SessionMode) -> Optional[int]:
+        """Return appropriate max_tokens for session mode.
+
+        Args:
+            session_mode: Current session mode
+
+        Returns:
+            Max tokens value or None for model default
+        """
+        # Try to use model-specific config if available
+        model_max = None
+        if hasattr(self, "prompt_config") and self.prompt_config:
+            model_max = self.prompt_config.sampling.max_tokens
+
+        # Mode-specific overrides
+        if session_mode == SessionMode.QUICK_LOOKUP:
+            return 1024  # Short, concise answers
+        elif session_mode == SessionMode.RESEARCH:
+            return 4096  # Long synthesis with citations
+        elif session_mode == SessionMode.INGEST:
+            return 2048  # Structured summaries
+
+        return model_max
+
+    def _get_available_tools_for_mode(
+        self,
+        session_mode: SessionMode,
+        research_stats: Optional[Dict[str, Any]] = None
+    ) -> Optional[List[str]]:
+        """Return list of available tools for current mode and phase.
+
+        Args:
+            session_mode: Current session mode
+            research_stats: Research tracking stats (for RESEARCH mode phase detection)
+
+        Returns:
+            List of tool names to include, or None for all tools
+        """
+        if session_mode == SessionMode.QUICK_LOOKUP:
+            # QUICK_LOOKUP: No memory_write (no archiving in quick mode)
+            # Allow: web_search, web_access, memory_query, retrieve_context
+            return ["web_search", "web_access", "memory_query", "retrieve_context"]
+
+        elif session_mode == SessionMode.RESEARCH:
+            if research_stats is None:
+                # Default to all tools if no stats provided
+                return None
+
+            # Phase-aware tool filtering for RESEARCH mode
+            if not research_stats.get("has_plan"):
+                # Planning phase: no tools needed yet (model should create plan first)
+                return []
+            elif research_stats.get("tool_calls", 0) < 10 and not research_stats.get("synthesis_triggered"):
+                # Exploration phase: search and access only
+                return ["web_search", "web_access", "retrieve_context"]
+            elif research_stats.get("synthesis_triggered"):
+                # Synthesis phase: allow memory storage
+                return ["memory_write", "memory_query", "retrieve_context"]
+            else:
+                # Transition phase: all research tools
+                return ["web_search", "web_access", "memory_write", "memory_query", "retrieve_context"]
+
+        elif session_mode == SessionMode.INGEST:
+            # INGEST: Primarily memory_write, allow web_access for fetching URLs
+            # No web_search (user provides the material)
+            return ["web_access", "memory_write", "memory_query", "retrieve_context"]
+
+        # Default: all tools
+        return None
+
     def send_message(
         self,
         session_id: str,
@@ -689,15 +978,24 @@ Continue researching until ALL stopping conditions are met. Resist premature con
 
         iterations = 0
         response_text = ""
-        # Research mode needs higher max_tokens for synthesis with full citations and analysis
-        # 4096 tokens allows for: plan + multiple tool calls + synthesis + citations + confidence + gaps
-        max_tokens = 4096 if active_mode == SessionMode.RESEARCH else None
-        # Use lower temperature for tool-calling to get focused, deterministic JSON
-        # Increase temperature after getting tool results for more creative synthesis
-        temperature = 0.2  # Lower than config default of 0.7 for precise tool calls
+        # Use mode-specific max_tokens
+        max_tokens = self._get_max_tokens_for_mode(active_mode)
 
         while True:
-            prompt_messages = self.build_prompt(context, user_message, active_mode) + extra_messages
+            # Determine current phase for temperature calculation
+            current_phase = "tool_call"  # Default
+            if active_mode == SessionMode.RESEARCH:
+                if not research_stats["has_plan"]:
+                    current_phase = "planning"
+                elif research_stats.get("synthesis_triggered"):
+                    current_phase = "synthesis"
+
+            # Calculate appropriate temperature for current mode and phase
+            has_tool_results = len(tool_results_accum) > 0
+            temperature = self._get_temperature_for_phase(active_mode, current_phase, has_tool_results)
+
+            # Build prompt with phase-aware tool filtering
+            prompt_messages = self.build_prompt(context, user_message, active_mode, research_stats) + extra_messages
             response_text = self.llm_client.chat(
                 prompt_messages,
                 max_tokens=max_tokens,
@@ -873,23 +1171,45 @@ Continue researching until ALL stopping conditions are met. Resist premature con
 
                     extra_messages.append(ChatMessage(role="system", content=synthesis_prompt))
                     self.logger.info("Triggering synthesis phase after tool execution", extra={"session_id": session_id})
+
+                    # NOTE: Extended thinking for synthesis (Anthropic best practice)
+                    # This is currently a placeholder since llama.cpp doesn't support extended thinking.
+                    # For Claude via API, this would be:
+                    # extra_payload = {"thinking": {"type": "enabled", "budget_tokens": 2000}}
+                    # For now, we rely on:
+                    # 1. Higher temperature (0.7) for creative synthesis (set via phase detection)
+                    # 2. Explicit <think> tags in the prompt (if model supports them)
+                    # 3. Comprehensive synthesis instructions above
+
                     continue  # One more LLM call for synthesis
 
             # QUICK_LOOKUP mode: if model responded but didn't make tool call, prompt for it
-            # This handles cases where the model says "Let me search..." without actually calling the tool
+            # This handles cases where the model says "I need to search..." without actually calling the tool
             if active_mode == SessionMode.QUICK_LOOKUP and iterations == 0 and len(tool_results_accum) == 0:
                 # Check if response suggests intent to use tools but didn't call any
                 response_lower = response_text.lower()
-                tool_intent_keywords = ["let me", "i'll", "i will", "searching for", "looking for", "finding"]
+                tool_intent_keywords = [
+                    "let me", "i'll", "i will", "i would need", "i need to",
+                    "searching for", "looking for", "finding", "search the web",
+                    "to get", "would require", "cannot determine", "don't have information"
+                ]
                 has_tool_intent = any(keyword in response_lower for keyword in tool_intent_keywords)
 
-                if has_tool_intent:
+                # Also check if the response explicitly says it can't answer from context
+                says_cant_answer = any(phrase in response_lower for phrase in [
+                    "cannot determine", "don't know", "unable to", "don't have",
+                    "no information", "cannot provide", "would need to"
+                ])
+
+                if has_tool_intent or says_cant_answer:
                     prompt_for_tools = (
-                        "Please proceed with the tool call now. Output the tool call immediately using the correct format.\n\n"
-                        "Do NOT explain what you will do - just make the tool call."
+                        "CRITICAL: You indicated you need more information. DO NOT explain - output a tool call NOW.\n\n"
+                        "Use web_search with a focused query. Output ONLY the tool call in the correct format:\n"
+                        f"{'<tool_call><function=web_search><parameter=query>latest Claude model Anthropic</parameter></function></tool_call>' if self.use_xml_format else '{\"name\": \"web_search\", \"arguments\": {\"query\": \"latest Claude model Anthropic\"}}'}\n\n"
+                        "Replace the query with your actual search terms. STOP after </tool_call>."
                     )
                     extra_messages.append(ChatMessage(role="system", content=prompt_for_tools))
-                    self.logger.info("Prompting for tool execution in QUICK_LOOKUP mode", extra={"session_id": session_id})
+                    self.logger.info("Prompting for tool execution in QUICK_LOOKUP mode", extra={"session_id": session_id, "reason": "tool_intent_detected"})
                     continue  # Continue loop to get tool call
 
             # No tool call detected and no recovery possible - log and exit

@@ -82,12 +82,28 @@ class ToolRegistry:
     def list_tools(self) -> List[Tool]:
         return list(self._tools.values())
 
-    def manifest(self) -> str:
-        """Render a manifest string summarizing all registered tools."""
+    def manifest(self, filter_tools: Optional[List[str]] = None) -> str:
+        """Render a manifest string summarizing all registered tools.
 
+        Args:
+            filter_tools: Optional list of tool names to include. If None, includes all tools.
+
+        Returns:
+            Formatted manifest string
+        """
         if not self._tools:
             return ""
-        entries = [format_tool_manifest_entry(tool) for tool in self._tools.values()]
+
+        # Filter tools if requested
+        if filter_tools is not None:
+            tools = [self._tools[name] for name in filter_tools if name in self._tools]
+        else:
+            tools = list(self._tools.values())
+
+        if not tools:
+            return ""
+
+        entries = [format_tool_manifest_entry(tool) for tool in tools]
         return "Available tools:\n" + "\n\n".join(entries)
 
 
