@@ -2,6 +2,15 @@
 
 All notable changes to Argo Brain are documented in this file.
 
+## [2025-12-06] - JSON Tool Parsing Defaults
+
+### Added - JSON Tool Parser
+- New `JSONToolParser` handles JSON tool calls wrapped in `<tool_call>` tags, including single objects, arrays, OpenAI-style `tool_calls`, embedded/concatenated JSON, and stringified arguments.
+
+### Changed - Parser Auto-Selection
+- ModelRegistry now picks the default parser from `argo_prompts` format: JSON models use `JSONToolParser`, XML models keep `XMLToolParser`, with clearer logging.
+- Updated `argo.toml` `model_name` to `qwen3-coder-30b-unsloth` to align auto-config with the running unsloth model.
+
 ## [2025-12-05] - Parallel Observability & Coverage
 
 ### Added - Parallel Execution Test

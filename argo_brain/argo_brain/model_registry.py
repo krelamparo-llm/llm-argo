@@ -349,8 +349,21 @@ class ModelRegistry:
             Tool parser class or None
         """
         if not model.has_tool_parser:
-            self.logger.info(f"Model {model.name} has no custom tool parser, using default")
-            # Return default XML parser
+            # Choose default based on prompt config if available
+            prompt_cfg = getattr(model, "argo_prompts", None)
+            fmt = getattr(prompt_cfg, "tool_calling", None)
+            fmt_value = getattr(fmt, "format", "").lower() if fmt else ""
+
+            if fmt_value == "json":
+                from .tools.json_parser import JSONToolParser
+                self.logger.info(
+                    f"Model {model.name} has no custom tool parser, using default JSON parser"
+                )
+                return JSONToolParser
+
+            self.logger.info(
+                f"Model {model.name} has no custom tool parser, using default XML parser"
+            )
             from .tools.xml_parser import XMLToolParser
             return XMLToolParser
 
