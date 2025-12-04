@@ -63,9 +63,9 @@ with open(log_file) as f:
             tool_match = re.search(r"tool=(\w+)", line) or re.search(r"tool_name=(\w+)", line)
             output_match = re.search(r"output_length=(\d+)", line)
 
-            if tool_match and output_match:
+            if tool_match:
                 tool_name = tool_match.group(1)
-                output_len = int(output_match.group(1))
+                output_len = int(output_match.group(1)) if output_match else None
                 metrics["tool_executions"][tool_name].append(output_len)
 
         # Parallel execution - match "X tools in parallel"
@@ -112,15 +112,21 @@ else:
 if metrics["tool_executions"]:
     print(f"\n🔧 TOOL EXECUTIONS")
     for tool_name, outputs in sorted(metrics["tool_executions"].items()):
-        avg_output = sum(outputs) / len(outputs)
+        measured_outputs = [o for o in outputs if o is not None]
         print(f"   {tool_name}:")
         print(f"      Calls: {len(outputs)}")
-        print(f"      Avg output size: {avg_output:.0f} chars ({avg_output/4:.0f} tokens est.)")
-        print(f"      Min: {min(outputs)} chars, Max: {max(outputs)} chars")
+        if measured_outputs:
+            avg_output = sum(measured_outputs) / len(measured_outputs)
+            print(f"      Avg output size: {avg_output:.0f} chars ({avg_output/4:.0f} tokens est.)")
+            print(f"      Min: {min(measured_outputs)} chars, Max: {max(measured_outputs)} chars")
+        else:
+            print(f"      Output size not logged (update log formatter to include output_length)")
 
         # Highlight web_access token savings
-        if tool_name == "web_access" and avg_output < 3000:
-            print(f"      ✅ Concise mode working! (~80% token savings vs 10K baseline)")
+        if tool_name == "web_access" and measured_outputs:
+            avg_output = sum(measured_outputs) / len(measured_outputs)
+            if avg_output < 3000:
+                print(f"      ✅ Concise mode working! (~80% token savings vs 10K baseline)")
 else:
     print(f"\n🔧 TOOL EXECUTIONS")
     print(f"   No tool executions found in recent logs")
@@ -146,11 +152,15 @@ print("\n✅ PHASE 1 SUCCESS INDICATORS")
 success_indicators = []
 
 if metrics["tool_executions"].get("web_access"):
-    avg_web_access = sum(metrics["tool_executions"]["web_access"]) / len(metrics["tool_executions"]["web_access"])
-    if avg_web_access < 3000:
-        success_indicators.append("✓ web_access using concise mode (avg < 3K chars)")
+    web_outputs = [o for o in metrics["tool_executions"]["web_access"] if o is not None]
+    if web_outputs:
+        avg_web_access = sum(web_outputs) / len(web_outputs)
+        if avg_web_access < 3000:
+            success_indicators.append("✓ web_access using concise mode (avg < 3K chars)")
+        else:
+            success_indicators.append("✗ web_access output still large (check response_format)")
     else:
-        success_indicators.append("✗ web_access output still large (check response_format)")
+        success_indicators.append("? web_access calls logged without output sizes (check log formatting)")
 
 if metrics["parallel_executions"]:
     success_indicators.append(f"✓ Parallel execution working ({len(metrics['parallel_executions'])} batches)")

@@ -53,6 +53,18 @@ def setup_logging(level: str | int = "INFO") -> logging.Logger:
                 extras.append(f"tool={record.tool}")
             if hasattr(record, 'chars'):
                 extras.append(f"chars={record.chars}")
+            if hasattr(record, 'input_length'):
+                extras.append(f"input_length={record.input_length}")
+            if hasattr(record, 'output_length'):
+                extras.append(f"output_length={record.output_length}")
+            if hasattr(record, 'snippet_count'):
+                extras.append(f"snippets={record.snippet_count}")
+            if hasattr(record, 'has_snippets'):
+                extras.append(f"has_snippets={record.has_snippets}")
+            if hasattr(record, 'metadata_keys'):
+                extras.append(f"metadata_keys={record.metadata_keys}")
+            if hasattr(record, 'execution_path'):
+                extras.append(f"path={record.execution_path}")
 
             if extras:
                 record.msg = f"{record.msg} [{', '.join(extras)}]"
