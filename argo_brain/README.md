@@ -4,10 +4,10 @@ Argo Brain is a personal AI assistant that runs entirely locally via `llama-serv
 
 ## Key Features
 
-- **8-Layer Memory Architecture**: Short-term conversation buffer, rolling summaries, autobiographical memory, profile facts, summary snapshots, tool results, web cache, and archival RAG
+- **6-Layer Memory Architecture**: Short-term conversation buffer, rolling summaries, autobiographical memory, archival RAG, web cache, and tool results
 - **Research Mode**: Planning-first architecture with multi-phase research workflows (planning → execution → synthesis)
 - **Tool System**: Extensible tools for web search (DuckDuckGo), web access (trafilatura), and memory operations
-- **Session Modes**: QUICK_LOOKUP (fast, max 3 tools), RESEARCH (deep, max 10 tools), INGEST (archival)
+- **Session Modes**: QUICK_LOOKUP (fast, max 2 tools), RESEARCH (deep, max 10 tools), INGEST (archival)
 - **Trust-Based Storage**: Content classified by trust level (personal/web/tool) for appropriate retention
 - **Local-First**: All data stored locally; no external API calls except web search/access
 
@@ -37,20 +37,25 @@ argo_brain/
 │   └── vector_store/              # Legacy shim (re-exports from core/vector_store)
 ├── scripts/                       # CLI entry points (chat_cli, run_tests, rag_core, etc.)
 ├── tests/                         # Unit and integration tests
-├── docs/                          # Architecture and design documentation
+├── examples/                      # Example prompts/notebooks
+├── plans/                         # Work-in-progress notes and plans
 ├── notes/                         # Daily work logs (YYYY-MM-DD.md format)
+├── data_raw/                      # Raw ingested artifacts (generated)
+├── vectordb/                      # Chroma vector store data (generated)
+├── docs/                          # Architecture and design documentation
 ├── argo.toml                      # Configuration file
-└── requirements.txt               # Python dependencies
+├── requirements.txt               # Python dependencies
+├── CHANGELOG.md                   # Release history
+└── test_results.json              # Test summaries (generated)
 ```
 
 ## Setup (WSL Ubuntu)
 
-### 1. Create Python Virtual Environment
+### 1. Activate Python Virtual Environment
 
 ```bash
 cd /home/krela/llm-argo/argo_brain
-python3 -m venv .venv
-source .venv/bin/activate
+source ~/venvs/llm-wsl/bin/activate  # or your existing virtualenv
 ```
 
 ### 2. Install Dependencies
@@ -91,7 +96,6 @@ Override any setting via `ARGO_*` environment variables.
 
 ```bash
 export WINDOWS_USERNAME="YourWindowsUser"
-# Or create: config/windows_username.txt
 ```
 
 ### 5. Start llama-server
@@ -138,7 +142,7 @@ python scripts/chat_cli.py --mode research          # Research mode
 
 ### Session Modes
 
-- **`quick_lookup`** (default): Fast answers with minimal tool usage (max 3 calls)
+- **`quick_lookup`** (default): Fast answers with minimal tool usage (max 2 calls)
 - **`research`**: Deep research with planning-first architecture, max 10 tool calls, synthesis with citations
 - **`ingest`**: Archive and summarize user-provided material
 
@@ -160,16 +164,14 @@ python scripts/rag_core.py "What did I read about machine learning?"
 
 ## Memory Architecture
 
-Argo builds prompts by fusing 8 memory sources:
+Argo builds prompts by fusing 6 memory sources:
 
 1. **Short-term buffer**: Last K=6 user/assistant turns (SQLite)
 2. **Session summary**: Compressed older context, updated every 20 messages
 3. **Autobiographical memory**: Long-lived personal facts (ChromaDB)
-4. **Profile facts**: Structured preferences/projects (SQLite)
-5. **Session summary snapshots**: Hierarchical archive every 80 messages
+4. **Archival RAG**: Reading history, YouTube transcripts, notes
+5. **Web cache**: Ephemeral tool outputs with 7-day TTL
 6. **Tool results**: Structured outputs from current conversation
-7. **Web cache**: Ephemeral tool outputs with 7-day TTL
-8. **Archival RAG**: Reading history, YouTube transcripts, notes
 
 ## Tool System
 
@@ -271,7 +273,7 @@ export ARGO_DEBUG_ALL=true        # All debug logging
 
 ### Major Flows
 
-1. **Chat Flow**: User message → MemoryManager assembles 8-layer context → ArgoAssistant builds prompt → LLMClient calls llama-server → Tool execution loop → Response
+1. **Chat Flow**: User message → MemoryManager assembles 6-layer context → ArgoAssistant builds prompt → LLMClient calls llama-server → Tool execution loop → Response
 2. **Tool Execution**: ToolPolicy validates → Tool executes → ToolTracker logs → Results cached for next prompt
 3. **Research Mode**: Planning phase → Tool execution phase (3+ sources) → Synthesis phase
 4. **Ingestion Flow**: SourceDocument → IngestionManager chunks/embeds → ChromaVectorStore stores
@@ -279,9 +281,9 @@ export ARGO_DEBUG_ALL=true        # All debug logging
 ### Key Design Patterns
 
 - **Dependency Injection**: `AppRuntime` factory wires all services
-- **8-Layer Memory**: Short-term buffer, session summary, autobiographical memory, profile facts, snapshots, tool results, web cache, archival RAG
+- **6-Layer Memory**: Short-term buffer, session summary, autobiographical memory, archival RAG, web cache, tool results
 - **Trust Levels**: PERSONAL_HIGH, WEB_UNTRUSTED, TOOL_OUTPUT
-- **Session Modes**: QUICK_LOOKUP (fast, max 3 tools), RESEARCH (deep, max 10 tools), INGEST (archival)
+- **Session Modes**: QUICK_LOOKUP (fast, max 2 tools), RESEARCH (deep, max 10 tools), INGEST (archival)
 
 ## Custom Scripts & Tools
 
@@ -303,7 +305,7 @@ export ARGO_DEBUG_ALL=true        # All debug logging
 ### Core Logic
 - [argo_brain/assistant/orchestrator.py](argo_brain/assistant/orchestrator.py) - Main AI orchestrator
 - [argo_brain/assistant/research_tracker.py](argo_brain/assistant/research_tracker.py) - Research mode tracking
-- [argo_brain/memory/manager.py](argo_brain/memory/manager.py) - 8-layer context assembly
+- [argo_brain/memory/manager.py](argo_brain/memory/manager.py) - 6-layer context assembly
 
 ### Tools
 - [argo_brain/tools/base.py](argo_brain/tools/base.py) - Tool protocol and registry

@@ -61,7 +61,7 @@ argo_brain/
 │   │
 │   ├── memory/                    # Conversation and knowledge management
 │   │   ├── db.py                  # MemoryDB - SQLite persistence
-│   │   ├── manager.py             # MemoryManager - 8-layer context assembly
+│   │   ├── manager.py             # MemoryManager - 6-layer context assembly
 │   │   ├── session_manager.py     # SessionManager - conversation lifecycle
 │   │   └── tool_tracker.py        # ToolTracker - tool audit logging
 │   │
@@ -208,24 +208,22 @@ If you’re unsure which command to use:
 
 Argo's main value comes from its memory/RAG pipeline. When touching related code, preserve these invariants:
 
-### 8-Layer Memory Architecture
+### 6-Layer Memory Architecture
 
-The system assembles context from 8 distinct sources (see `memory/manager.py`):
+The system assembles context from 6 sources (see `memory/manager.py`):
 
 1. **Short-term buffer**: Last K=6 user/assistant turns (SQLite `messages`)
 2. **Session summary**: Compressed older context (SQLite `session_summaries`)
 3. **Autobiographical memory**: Personal facts (ChromaDB `argo_autobiographical_memory`)
-4. **Profile facts**: Structured preferences (SQLite `profile_facts`)
-5. **Session summary snapshots**: Hierarchical archive (SQLite `session_summary_snapshots`)
+4. **Archival RAG**: Reading history, YouTube, notes (ChromaDB namespaces)
+5. **Web cache**: Ephemeral tool outputs (ChromaDB `argo_web_cache`, TTL=7 days)
 6. **Tool results**: Structured outputs from tool execution
-7. **Web cache**: Ephemeral tool outputs (ChromaDB `argo_web_cache`, TTL=7 days)
-8. **Archival RAG**: Reading history, YouTube, notes (ChromaDB namespaces)
 
 ### Separation of concerns
 
 - `rag.py`: Chunking, embedding, and retrieval helpers
 - `core/memory/ingestion.py`: `IngestionManager` handles document → chunks → vector store
-- `memory/manager.py`: `MemoryManager` assembles 8-layer context for prompts
+- `memory/manager.py`: `MemoryManager` assembles 6-layer context for prompts
 - `memory/session_manager.py`: Conversation lifecycle, summarization
 - `memory/tool_tracker.py`: Tool execution audit logging
 
@@ -383,4 +381,3 @@ Any additional context or thoughts
 - Onboarding guides
 
 ---
-
