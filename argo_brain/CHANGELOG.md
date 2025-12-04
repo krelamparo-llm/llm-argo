@@ -2,6 +2,21 @@
 
 All notable changes to Argo Brain are documented in this file.
 
+## [2025-12-05] - Parallel Observability & Coverage
+
+### Added - Parallel Execution Test
+- New unit test `test_parallel_execution.py` exercises `_execute_tools_parallel` with a dummy tool, asserting concurrent threads, preserved ordering, and faster-than-sequential timing.
+- Logging is initialized inside the test to satisfy ArgoAssistant startup expectations.
+
+### Changed - Parallel & Tool Metrics Logging
+- Orchestrator now emits `PARALLEL_EXEC_START/DONE/RESULT` markers with execution path and counts for each batch and tool result.
+- Log formatter adds execution_path plus parallel counts/indices, tool input/output lengths, snippet counts, and metadata keys so metrics are captured in logs.
+- Phase 1 analyzer recognizes the new parallel markers and tolerates missing tool output lengths when summarizing.
+
+### Impact
+- Parallel runs are now provable via log markers and automated test coverage.
+- Tool execution metrics (output lengths, snippets) flow into logs for Phase 1 reporting.
+
 ## [2025-12-04] - Research Fetch Resilience
 
 ### Changed - Research Mode Robustness

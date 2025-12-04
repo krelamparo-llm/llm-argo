@@ -107,6 +107,7 @@ class ArgoAssistant:
         from ..model_prompts import ModelPromptConfig
 
         model_name = CONFIG.llm.model_name or ""
+        self.logger.info("Active LLM model: %s", model_name or "unspecified (using defaults)")
         if model_name:
             self.logger.info(f"Auto-configuring for model: {model_name}")
             registry = get_global_registry()
@@ -1165,15 +1166,29 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     extra_messages.append(ChatMessage(role="system", content=f"POLICY_REJECTION {msg}"))
                 # Execute tools (in parallel if multiple approved)
                 if len(approved) > 1:
+                    parallel_batch = approved[:max_tool_calls - iterations]
                     self.logger.info(
-                        f"Executing {len(approved)} tools in parallel",
-                        extra={"session_id": session_id, "tools": [p.tool for p in approved]}
+                        f"PARALLEL_EXEC_START count={len(parallel_batch)}",
+                        extra={
+                            "session_id": session_id,
+                            "tools": [p.tool for p in parallel_batch],
+                            "execution_path": ExecutionPath.PARALLEL,
+                            "parallel_count": len(parallel_batch),
+                        }
                     )
                     results = self._execute_tools_parallel(
-                        approved[:max_tool_calls - iterations],
+                        parallel_batch,
                         session_id,
                         user_message,
                         active_mode
+                    )
+                    self.logger.info(
+                        f"PARALLEL_EXEC_DONE count={len(results)}",
+                        extra={
+                            "session_id": session_id,
+                            "execution_path": ExecutionPath.PARALLEL,
+                            "parallel_count": len(results),
+                        }
                     )
                 else:
                     # Single tool - execute normally
@@ -1659,6 +1674,17 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 index = future_to_index[future]
                 try:
                     results[index] = future.result()
+                    self.logger.info(
+                        "PARALLEL_EXEC_RESULT",
+                        extra={
+                            "session_id": session_id,
+                            "execution_path": ExecutionPath.PARALLEL,
+                            "tool": proposals[index].tool,
+                            "tool_name": proposals[index].tool,
+                            "parallel_index": index,
+                            "parallel_total": len(proposals),
+                        }
+                    )
                 except Exception as exc:
                     self.logger.error(
                         f"Tool execution failed",
@@ -1666,6 +1692,7 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                         extra={
                             "session_id": session_id,
                             "tool": proposals[index].tool,
+                            "execution_path": ExecutionPath.PARALLEL,
                             "error": str(exc)
                         }
                     )

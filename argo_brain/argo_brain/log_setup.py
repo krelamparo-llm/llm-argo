@@ -65,6 +65,12 @@ def setup_logging(level: str | int = "INFO") -> logging.Logger:
                 extras.append(f"metadata_keys={record.metadata_keys}")
             if hasattr(record, 'execution_path'):
                 extras.append(f"path={record.execution_path}")
+            if hasattr(record, 'parallel_count'):
+                extras.append(f"parallel_count={record.parallel_count}")
+            if hasattr(record, 'parallel_index'):
+                extras.append(f"parallel_index={record.parallel_index}")
+            if hasattr(record, 'parallel_total'):
+                extras.append(f"parallel_total={record.parallel_total}")
 
             if extras:
                 record.msg = f"{record.msg} [{', '.join(extras)}]"

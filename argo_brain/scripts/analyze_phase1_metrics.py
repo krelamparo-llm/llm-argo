@@ -68,9 +68,13 @@ with open(log_file) as f:
                 output_len = int(output_match.group(1)) if output_match else None
                 metrics["tool_executions"][tool_name].append(output_len)
 
-        # Parallel execution - match "X tools in parallel"
-        if "tools in parallel" in line:
-            count_match = re.search(r"Executing (\d+) tools? in parallel", line)
+        # Parallel execution - match explicit markers
+        if "PARALLEL_EXEC" in line or "tools in parallel" in line or "path=parallel" in line:
+            count_match = (
+                re.search(r"PARALLEL_EXEC.*count=(\d+)", line)
+                or re.search(r"parallel_count=(\d+)", line)
+                or re.search(r"Executing (\d+) tools? in parallel", line)
+            )
             if count_match:
                 metrics["parallel_executions"].append(int(count_match.group(1)))
 
