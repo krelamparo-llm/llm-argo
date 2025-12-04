@@ -2,7 +2,21 @@
 
 All notable changes to Argo Brain are documented in this file.
 
-## [2025-12-06] - JSON Tool Parsing Defaults
+## [2025-12-04] - Automated Manual Test Validation
+
+### Added - Heuristic Validators for Manual Suite
+- New `tests/manual_eval.py` provides per-test heuristics (tool usage, citations, safety refusals, recency handling, parallelism hints) so manual cases can self-grade in `--auto` mode.
+- Test runner now records per-turn debug outputs and session artifacts, then routes observations through the validator map for PASS/FAIL + reasons.
+
+### Changed - Manual Runner UX
+- `scripts/run_tests.py` captures tool runs, profile facts, and transcripts for each session, enabling richer validation and traceability without extra model judges.
+- Debug files include turn numbers and session IDs (`/tmp/test_<id>_<session>_turnN.txt`) to ease triage.
+
+### Documentation
+- Added evaluation best practices note in `docs/eval_best_practices.md` (agent-as-judge patterns, continuous sampling, contamination-free sets).
+- README testing section now calls out the automated manual test heuristics.
+
+## [2025-12-03] - JSON Tool Parsing Defaults
 
 ### Added - JSON Tool Parser
 - New `JSONToolParser` handles JSON tool calls wrapped in `<tool_call>` tags, including single objects, arrays, OpenAI-style `tool_calls`, embedded/concatenated JSON, and stringified arguments.
@@ -11,7 +25,7 @@ All notable changes to Argo Brain are documented in this file.
 - ModelRegistry now picks the default parser from `argo_prompts` format: JSON models use `JSONToolParser`, XML models keep `XMLToolParser`, with clearer logging.
 - Updated `argo.toml` `model_name` to `qwen3-coder-30b-unsloth` to align auto-config with the running unsloth model.
 
-## [2025-12-05] - Parallel Observability & Coverage
+## [2025-12-03] - Parallel Observability & Coverage
 
 ### Added - Parallel Execution Test
 - New unit test `test_parallel_execution.py` exercises `_execute_tools_parallel` with a dummy tool, asserting concurrent threads, preserved ordering, and faster-than-sequential timing.
@@ -26,7 +40,7 @@ All notable changes to Argo Brain are documented in this file.
 - Parallel runs are now provable via log markers and automated test coverage.
 - Tool execution metrics (output lengths, snippets) flow into logs for Phase 1 reporting.
 
-## [2025-12-04] - Research Fetch Resilience
+## [2025-12-03] - Research Fetch Resilience
 
 ### Changed - Research Mode Robustness
 - Added failure-aware tracking in ResearchStats (failed fetch counts, consecutive failures, failed host set).
@@ -35,7 +49,7 @@ All notable changes to Argo Brain are documented in this file.
 
 ---
 
-## [2025-12-03] - Unreleased
+## [2025-12-03] - Architecture and Logging improvements
 
 ### Added - LLM-Readable Logging System
 

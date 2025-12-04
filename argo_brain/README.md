@@ -223,6 +223,8 @@ python scripts/run_tests.py --test TEST-005 --auto --verbose
 ARGO_DEBUG_RESEARCH=true python scripts/run_tests.py --test TEST-005 --auto
 ```
 
+**Auto-validation**: In `--auto`, the runner now records per-turn responses to `/tmp/test_<id>_<session>_turnN.txt`, gathers tool runs/profile facts from SQLite, and applies heuristic checks per test (tool usage, citations, safety refusals, memory vs web). Failures include a reason for fast triage.
+
 ### Test Categories
 - `test_research_tracker.py` - ResearchStats tracking (17 tests)
 - `test_architectural_fixes.py` - Regression tests for Issues 1-6
