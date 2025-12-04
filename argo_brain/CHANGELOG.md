@@ -2,7 +2,16 @@
 
 All notable changes to Argo Brain are documented in this file.
 
-## [Unreleased] - 2025-12-03
+## [2025-12-04] - Research Fetch Resilience
+
+### Changed - Research Mode Robustness
+- Added failure-aware tracking in ResearchStats (failed fetch counts, consecutive failures, failed host set).
+- Research loop now nudges away from previously failed hosts and keeps gathering sources before synthesis.
+- Introduced partial-synthesis fallback when tool attempts or fetch failures block reaching 3 sources; logs partial transition with evidence count.
+
+---
+
+## [2025-12-03] - Unreleased
 
 ### Added - LLM-Readable Logging System
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Set
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from ..tools.base import ToolResult
@@ -31,10 +32,13 @@ class ResearchStats:
     tool_calls: int = 0
     searches: int = 0
     sources_fetched: int = 0
+    failed_fetches: int = 0
+    consecutive_fetch_failures: int = 0
 
     # Data tracking
     unique_urls: Set[str] = field(default_factory=set)
     search_queries: List[str] = field(default_factory=list)
+    failed_hosts: Set[str] = field(default_factory=set)
 
     # Execution path tracking (for debugging)
     batch_executions: int = 0
@@ -99,8 +103,30 @@ class ResearchStats:
                 self._logger.debug(msg, extra={"session_id": self._session_id})
 
         elif tool_name == "web_access":
+            # Determine success/failure of the fetch
+            is_error = False
+            url = None
+            status = None
             if result.metadata:
-                url = result.metadata.get("url")
+                url = result.metadata.get("url") or result.metadata.get("source_id")
+                status = result.metadata.get("http_status")
+                is_error = bool(result.metadata.get("error")) or (
+                    isinstance(status, int) and status >= 400
+                )
+            if not url:
+                url = arguments.get("url")
+
+            if is_error:
+                self.failed_fetches += 1
+                self.consecutive_fetch_failures += 1
+                if url:
+                    host = urlparse(str(url)).hostname or ""
+                    if host:
+                        self.failed_hosts.add(host)
+            else:
+                self.consecutive_fetch_failures = 0
+
+            if result.metadata and not is_error:
                 if url:
                     before_count = len(self.unique_urls)
                     self.unique_urls.add(url)
@@ -150,6 +176,43 @@ class ResearchStats:
 
         return should_trigger
 
+    def should_force_partial_synthesis(
+        self,
+        *,
+        min_unique: int = 2,
+        max_tool_calls: int = 6,
+        max_consecutive_failures: int = 2
+    ) -> bool:
+        """
+        Decide whether to allow partial synthesis when full criteria aren't met.
+
+        Partial synthesis kicks in when:
+        - We have a plan, but synthesis not yet triggered
+        - At least `min_unique` sources are available
+        - Either total tool calls exceed `max_tool_calls` OR consecutive fetch failures exceed threshold
+        """
+        if self.synthesis_triggered or not self.has_plan:
+            return False
+
+        has_enough_for_partial = len(self.unique_urls) >= min_unique
+        too_many_attempts = self.tool_calls >= max_tool_calls
+        too_many_failures = self.consecutive_fetch_failures >= max_consecutive_failures
+
+        allow_partial = has_enough_for_partial and (too_many_attempts or too_many_failures)
+
+        if CONFIG.debug.research_mode or allow_partial:
+            msg = format_decision(
+                "partial_synth",
+                allow_partial,
+                p="Y" if self.has_plan else "N",
+                u=f"{len(self.unique_urls)}",
+                t="Y" if self.synthesis_triggered else "N"
+            )
+            log_level = logging.INFO if allow_partial else logging.DEBUG
+            self._logger.log(log_level, msg, extra={"session_id": self._session_id})
+
+        return allow_partial
+
     def get_phase(self) -> str:
         """
         Return current research phase.
@@ -181,8 +244,11 @@ class ResearchStats:
             "tool_calls": self.tool_calls,
             "searches": self.searches,
             "sources_fetched": self.sources_fetched,
+            "failed_fetches": self.failed_fetches,
+            "consecutive_fetch_failures": self.consecutive_fetch_failures,
             "unique_urls_count": len(self.unique_urls),
             "unique_urls": list(self.unique_urls),
+            "failed_hosts": list(self.failed_hosts),
             "search_queries": self.search_queries,
             "phase": self.get_phase(),
             "batch_executions": self.batch_executions,

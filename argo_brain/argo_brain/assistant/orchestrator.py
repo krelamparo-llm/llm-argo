@@ -1351,6 +1351,41 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
                 continue  # One more LLM call for synthesis
 
+            # Research mode: allow partial synthesis after repeated failures/attempts
+            if active_mode == SessionMode.RESEARCH and research_stats.should_force_partial_synthesis():
+                research_stats.synthesis_triggered = True
+                msg = format_state_transition(
+                    "exec",
+                    "synth",
+                    f"{research_stats.get_sources_count()}URL+partial"
+                )
+                self.logger.info(
+                    msg,
+                    extra={
+                        "session_id": session_id,
+                        "sources": research_stats.get_sources_count(),
+                        "failed_fetches": research_stats.failed_fetches,
+                        "consecutive_failures": research_stats.consecutive_fetch_failures,
+                    },
+                )
+                partial_prompt = (
+                    "You have gathered as many sources as available, but fewer than the ideal target. "
+                    "Proceed with a PARTIAL synthesis using the sources you have. "
+                    "Structure:\n\n"
+                    "<synthesis>\n"
+                    "[Answer the research question with the available evidence]\n"
+                    "[Cite sources as [1], [2], etc.]\n"
+                    "[Note any limitations from missing sources]\n"
+                    "</synthesis>\n\n"
+                    "<confidence>0.0-1.0</confidence>\n\n"
+                    "<gaps>\n"
+                    "[List gaps caused by unavailable or failed sources]\n"
+                    "</gaps>\n\n"
+                    "Do NOT request additional tools; finalize now."
+                )
+                extra_messages.append(ChatMessage(role="system", content=partial_prompt))
+                continue
+
             # QUICK_LOOKUP mode: if model responded but didn't make tool call, prompt for it
             # This handles cases where the model says "I need to search..." without actually calling the tool
             if active_mode == SessionMode.QUICK_LOOKUP and iterations == 0 and len(tool_results_accum) == 0:
@@ -1379,6 +1414,39 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     extra_messages.append(ChatMessage(role="system", content=prompt_for_tools))
                     self.logger.info("Prompting for tool execution in QUICK_LOOKUP mode", extra={"session_id": session_id, "reason": "tool_intent_detected"})
                     continue  # Continue loop to get tool call
+
+            # RESEARCH mode: If we have a plan but fewer than 3 sources, force another tool call
+            if (
+                active_mode == SessionMode.RESEARCH
+                and research_stats.has_plan
+                and not research_stats.synthesis_triggered
+            ):
+                current_sources = research_stats.get_sources_count()
+                if current_sources < 3 and iterations < max_tool_calls:
+                    missing = 3 - current_sources
+                    avoid_hosts = research_stats.failed_hosts
+                    avoid_clause = ""
+                    if avoid_hosts:
+                        avoid_clause = f" Avoid failed hosts: {', '.join(sorted(avoid_hosts))}."
+                    prompt_more_sources = (
+                        "You have not collected enough sources to synthesize yet. "
+                        f"Current unique sources: {current_sources}/3. "
+                        f"Fetch {missing} more distinct sources by running web_search followed by web_access on trustworthy, non-duplicate URLs. "
+                        "Avoid previously failing or blocked domains (e.g., medium.com returning 403)." +
+                        (f"{avoid_clause} " if avoid_clause else " ") +
+                        "Output ONLY the next tool call now and stop after the closing tag."
+                    )
+                    extra_messages.append(ChatMessage(role="system", content=prompt_more_sources))
+                    self.logger.info(
+                        "Research mode: prompting for more sources",
+                        extra={
+                            "session_id": session_id,
+                            "sources": current_sources,
+                            "max_tool_calls": max_tool_calls,
+                            "iterations": iterations,
+                        },
+                    )
+                    continue
 
             # No tool call detected - handle based on mode
             # In research mode with a plan, retry more aggressively before giving up
