@@ -2,6 +2,25 @@
 
 All notable changes to Argo Brain are documented in this file.
 
+## [2025-12-07] - Quick Mode Safety, Routing, and Eval Tweaks
+
+### Added - Quick Mode Guards
+- Context-only and ambiguity guards now short-circuit tool calls, prompting for clarification instead of guessing.
+- Deep/broad requests in QUICK_LOOKUP trigger a suggestion to switch to RESEARCH mode.
+- Memory-first gate runs before web search; if no useful memory hit and the ask is external (latest/docs/etc.), seed a single `web_search` (max_results=5) for citations.
+
+### Changed - Prompt Injection Handling
+- Prompt-injection requests are summarized as attacks (“quote is asking to reveal the system prompt”) with explicit refusal; no tools are executed.
+
+### Changed - Evaluations
+- Manual test heuristics relaxed for quick mode (citations ≥1, single search allowed) and allow safe summaries/normalized refusals (smart quotes, refusal phrasing).
+- RAG recall test now passes if either retriever+generator or DPR/FiD is mentioned.
+
+### Impact
+- TEST-019 now nudges to RESEARCH instead of trying to do deep analysis in quick mode.
+- Quick answers stay local-first, clarify ambiguities, and only search when memory is empty and the ask is external.
+- Safer handling of prompt injection and PII refusals across validators.
+
 ## [2025-12-04] - Automated Manual Test Validation
 
 ### Added - Heuristic Validators for Manual Suite

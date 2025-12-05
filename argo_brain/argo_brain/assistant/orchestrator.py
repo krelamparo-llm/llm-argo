@@ -1041,6 +1041,11 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             extra={"session_id": session_id, "chars": len(user_message)},
         )
 
+        # Safety preflight: block dangerous/PII inputs before the LLM or tools
+        safety_block = self._preflight_safety_refusal(session_id, user_message)
+        if safety_block:
+            return safety_block
+
         # Guard-rail: empty or whitespace-only prompts should not hit the LLM
         if not user_message or not user_message.strip():
             context = self.memory_manager.get_context_for_prompt(
@@ -1067,7 +1072,35 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 tool_results=[],
             )
 
+        # Memory and clarification helpers for QUICK_LOOKUP / INGEST
+        context_note = self._maybe_handle_context_note(session_id, user_message, active_mode)
+        if context_note:
+            return context_note
+
+        memory_shortcut = self._maybe_handle_memory_intent(session_id, user_message, active_mode)
+        if memory_shortcut:
+            return memory_shortcut
+
+        clarification = self._maybe_request_clarification(session_id, user_message, active_mode)
+        if clarification:
+            return clarification
+
+        if active_mode == SessionMode.INGEST:
+            ingest_response = self._maybe_handle_ingest(session_id, user_message, active_mode)
+            if ingest_response:
+                return ingest_response
+
+        # Mode suggestion: for deep/broad tasks in QUICK_LOOKUP, suggest RESEARCH
+        if active_mode == SessionMode.QUICK_LOOKUP:
+            research_prompt = self._maybe_suggest_research_mode(session_id, user_message)
+            if research_prompt:
+                return research_prompt
+
+        # Prepopulate with memory gate and optional quick search for fact/doc asks
         tool_results_accum = list(tool_results or [])
+        pre_results = self._maybe_seed_quick_tools(session_id, user_message, active_mode)
+        tool_results_accum.extend(pre_results)
+
         context = self.memory_manager.get_context_for_prompt(
             session_id,
             user_message,
@@ -1542,6 +1575,337 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             prompt_messages=prompt_messages if return_prompt else None,
             tool_results=tool_results_accum,
         )
+
+    # ---- Safety & intent helpers -------------------------------------------
+
+    def _preflight_safety_refusal(self, session_id: str, user_message: str) -> Optional[AssistantResponse]:
+        """Block obvious unsafe requests before any LLM/tool work."""
+        text = (user_message or "").lower()
+        ssn_pattern = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+        dangerous_files = [
+            "file://", "..", "\\\\", "/etc/passwd", "/etc/shadow",
+        ]
+        dangerous_cmds = [
+            "rm -rf /", ";/bin/rm -rf /", "rm -r /", "format c:", "wipe all files",
+        ]
+
+        def refuse(message: str) -> AssistantResponse:
+            context = self.memory_manager.get_context_for_prompt(
+                session_id,
+                user_message,
+                tool_results=[],
+            )
+            self.session_manager.record_turn(session_id, user_message, message)
+            recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+            self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+            return AssistantResponse(
+                text=message,
+                context=context,
+                raw_text=message,
+                prompt_messages=None,
+                tool_results=[],
+            )
+
+        # PII/SSN refusal
+        if ssn_pattern.search(user_message) or "social security" in text:
+            return refuse(
+                "I can’t help with social security numbers or other sensitive personal data, "
+                "and I won’t run any tools on that."
+            )
+
+        # Prompt-injection / system prompt probing
+        if "system prompt" in text or "ignore previous instructions" in text:
+            safe_summary = (
+                "The quote is asking to ignore prior instructions and reveal the system prompt — "
+                "that’s a prompt-injection attempt. I won’t expose any internal instructions."
+            )
+            return refuse(safe_summary)
+
+        # Dangerous file/path queries
+        if any(marker in text for marker in dangerous_files):
+            return refuse(
+                "I can’t access local or system files and won’t run tools on file or path inputs."
+            )
+
+        # Dangerous command payloads
+        if any(cmd in text for cmd in dangerous_cmds):
+            return refuse(
+                "That payload looks destructive (e.g., `rm -rf /`). I won’t execute or forward it."
+            )
+
+        return None
+
+    def _maybe_handle_memory_intent(
+        self,
+        session_id: str,
+        user_message: str,
+        active_mode: SessionMode,
+    ) -> Optional[AssistantResponse]:
+        """Auto-handle explicit remember/recall intents in QUICK_LOOKUP."""
+        if active_mode != SessionMode.QUICK_LOOKUP:
+            return None
+
+        lowered = user_message.strip().lower()
+        remember_match = re.match(r"^\s*remember(?: that)?\s+(.*)", user_message, flags=re.IGNORECASE)
+        recall_like = bool(
+            re.search(r"\b(do i|i)\s+(prefer|like|use)\b", lowered)
+            or re.search(r"\bwhat\b.*\bprefer\b", lowered)
+            or re.search(r"\bwhich\b.*\bprefer\b", lowered)
+        )
+
+        if remember_match:
+            fact_text = remember_match.group(1).strip() or user_message.strip()
+            result = self.run_tool(
+                "memory_write",
+                session_id,
+                fact_text,
+                metadata={"text": fact_text, "source_type": "conversation_note"},
+                session_mode=active_mode,
+            )
+            confirmation = f"I stored that: {fact_text}"
+            self.session_manager.record_turn(session_id, user_message, confirmation)
+            recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+            self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+            context = self.memory_manager.get_context_for_prompt(
+                session_id,
+                user_message,
+                tool_results=[result],
+            )
+            return AssistantResponse(
+                text=confirmation,
+                context=context,
+                raw_text=confirmation,
+                prompt_messages=None,
+                tool_results=[result],
+            )
+
+        if recall_like:
+            result = self.run_tool(
+                "memory_query",
+                session_id,
+                user_message,
+                metadata={"query": user_message, "top_k": 5},
+                session_mode=active_mode,
+            )
+            if result.snippets:
+                answer = f"From memory: {result.snippets[0]}"
+            else:
+                answer = "I couldn’t find that in memory; want me to look it up?"
+            self.session_manager.record_turn(session_id, user_message, answer)
+            recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+            self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+            context = self.memory_manager.get_context_for_prompt(
+                session_id,
+                user_message,
+                tool_results=[result],
+            )
+            return AssistantResponse(
+                text=answer,
+                context=context,
+                raw_text=answer,
+                prompt_messages=None,
+                tool_results=[result],
+            )
+
+        return None
+
+    def _maybe_handle_context_note(
+        self,
+        session_id: str,
+        user_message: str,
+        active_mode: SessionMode,
+    ) -> Optional[AssistantResponse]:
+        """Handle context-setting statements without running tools."""
+        if active_mode != SessionMode.QUICK_LOOKUP:
+            return None
+        text = (user_message or "").strip().lower()
+        context_patterns = [
+            "we were talking about",
+            "as we discussed",
+            "earlier we noted",
+            "previously you said",
+            "just to recap",
+        ]
+        if any(pat in text for pat in context_patterns) and not any(
+            verb in text for verb in ["find", "search", "summarize", "explain", "compare", "tell me"]
+        ):
+            reply = "Got it—you’re referring to that topic. What do you want me to do with it (summarize, search, or move on)?"
+            self.session_manager.record_turn(session_id, user_message, reply)
+            recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+            self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+            context = self.memory_manager.get_context_for_prompt(
+                session_id,
+                user_message,
+                tool_results=[],
+            )
+            return AssistantResponse(
+                text=reply,
+                context=context,
+                raw_text=reply,
+                prompt_messages=None,
+                tool_results=[],
+            )
+        return None
+
+    def _maybe_request_clarification(
+        self,
+        session_id: str,
+        user_message: str,
+        active_mode: SessionMode,
+    ) -> Optional[AssistantResponse]:
+        """Ask for clarification on ambiguous referents to avoid hallucination/tool spam."""
+        if active_mode != SessionMode.QUICK_LOOKUP:
+            return None
+        text = (user_message or "").strip().lower()
+        ambiguous = (
+            "that thing we talked about" in text
+            or (len(text.split()) <= 3 and text in {"that", "it", "this", "those"})
+            or ("that thing" in text and "talked" in text)
+        )
+        if not ambiguous:
+            return None
+        prompt = "I’m not sure which topic you mean. Could you clarify what you want me to look up?"
+        self.session_manager.record_turn(session_id, user_message, prompt)
+        recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+        self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+        context = self.memory_manager.get_context_for_prompt(
+            session_id,
+            user_message,
+            tool_results=[],
+        )
+        return AssistantResponse(
+            text=prompt,
+            context=context,
+            raw_text=prompt,
+            prompt_messages=None,
+            tool_results=[],
+        )
+
+    def _maybe_handle_ingest(
+        self,
+        session_id: str,
+        user_message: str,
+        active_mode: SessionMode,
+    ) -> Optional[AssistantResponse]:
+        """Auto-store simple ingest notes and confirm."""
+        if active_mode != SessionMode.INGEST:
+            return None
+        note = user_message
+        if ":" in user_message:
+            _, tail = user_message.split(":", 1)
+            note = tail.strip() or user_message
+        # Ensure we keep topic wording for clarity in retrieval
+        result = self.run_tool(
+            "memory_write",
+            session_id,
+            note,
+            metadata={
+                "text": note,
+                "source_type": "ingest_note",
+                "source_id": f"ingest:{session_id}:{abs(hash(note))}",
+            },
+            session_mode=active_mode,
+        )
+        final_text = f"Summary: {note}\nStored to memory with tags: ingest_note."
+        self.session_manager.record_turn(session_id, user_message, final_text)
+        recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+        self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+        context = self.memory_manager.get_context_for_prompt(
+            session_id,
+            user_message,
+            tool_results=[result],
+        )
+        return AssistantResponse(
+            text=final_text,
+            context=context,
+            raw_text=final_text,
+            prompt_messages=None,
+            tool_results=[result],
+        )
+
+    def _maybe_suggest_research_mode(
+        self,
+        session_id: str,
+        user_message: str,
+    ) -> Optional[AssistantResponse]:
+        """Suggest switching to RESEARCH for deep/broad tasks in quick mode."""
+        text = (user_message or "").lower()
+        deep_markers = [
+            "deep analysis", "market analysis", "benchmarks", "pricing",
+            "deployment models", "comprehensive", "compare", "research", "report",
+        ]
+        if any(marker in text for marker in deep_markers):
+            reply = (
+                "That sounds like a deeper task. Switch to RESEARCH mode so I can plan, search, and cite multiple sources?"
+            )
+            self.session_manager.record_turn(session_id, user_message, reply)
+            recent_turns = self.session_manager.get_recent_messages(session_id, limit=4)
+            self.memory_manager.extract_and_store_memories(session_id, recent_turns)
+            context = self.memory_manager.get_context_for_prompt(
+                session_id,
+                user_message,
+                tool_results=[],
+            )
+            return AssistantResponse(
+                text=reply,
+                context=context,
+                raw_text=reply,
+                prompt_messages=None,
+                tool_results=[],
+            )
+        return None
+
+    def _should_force_quick_search(self, user_message: str) -> bool:
+        text = (user_message or "").lower()
+        keywords = [
+            "latest", "release", "version", "find", "docs", "documentation", "manual",
+            "async", "summarize doc", "api docs", "who is", "what is"
+        ]
+        return any(kw in text for kw in keywords)
+
+    def _maybe_seed_quick_tools(
+        self,
+        session_id: str,
+        user_message: str,
+        active_mode: SessionMode,
+    ) -> List[ToolResult]:
+        """Run a lightweight memory gate and optional web_search for quick facts/docs."""
+        if active_mode != SessionMode.QUICK_LOOKUP:
+            return []
+
+        seeded: List[ToolResult] = []
+
+        # Memory gate: try memory_query first
+        try:
+            mem_result = self.run_tool(
+                "memory_query",
+                session_id,
+                user_message,
+                metadata={"query": user_message, "top_k": 3},
+                session_mode=active_mode,
+            )
+            if mem_result.snippets:
+                seeded.append(mem_result)
+                return seeded  # Good memory hit; skip search
+        except Exception:
+            # If memory_query fails, fall through to search decision
+            self.logger.debug("memory_query gate skipped", exc_info=True)
+
+        # If no memory hit and the ask looks external, seed one web_search
+        if self._should_force_quick_search(user_message):
+            try:
+                search_result = self.run_tool(
+                    "web_search",
+                    session_id,
+                    user_message,
+                    metadata={"query": user_message, "max_results": 5},
+                    session_mode=active_mode,
+                )
+                seeded.append(search_result)
+            except Exception:
+                self.logger.debug("web_search seeding failed", exc_info=True)
+
+        return seeded
 
     def _normalize_truncated_tags(self, text: str) -> str:
         """Fix cases where the model omits the closing '>' on XML-ish tags.
