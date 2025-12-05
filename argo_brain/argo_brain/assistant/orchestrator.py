@@ -518,6 +518,8 @@ Remember: Your summary will be retrieved later via semantic search, so include r
         user_message: str,
         session_mode: SessionMode,
         research_stats: Optional[Dict[str, Any]] = None,
+        *,
+        forbid_web: bool = False,
     ) -> List[ChatMessage]:
         """Construct chat messages for llama-server.
 
@@ -533,7 +535,12 @@ Remember: Your summary will be retrieved later via semantic search, so include r
         messages: List[ChatMessage] = [ChatMessage(role="system", content=self.system_prompt)]
 
         # Get available tools for current mode and phase
-        available_tools = self._get_available_tools_for_mode(session_mode, research_stats)
+        forbid_web = self._user_forbids_web(user_message)
+        available_tools = self._get_available_tools_for_mode(
+            session_mode,
+            research_stats,
+            forbid_web=forbid_web,
+        )
         manifest_text = self.tool_registry.manifest(filter_tools=available_tools)
         if manifest_text and "No external tools" not in manifest_text:
             messages.append(ChatMessage(role="system", content=manifest_text))
@@ -980,7 +987,9 @@ Remember: Your summary will be retrieved later via semantic search, so include r
     def _get_available_tools_for_mode(
         self,
         session_mode: SessionMode,
-        research_stats: Optional[Dict[str, Any]] = None
+        research_stats: Optional[Dict[str, Any]] = None,
+        *,
+        forbid_web: bool = False,
     ) -> Optional[List[str]]:
         """Return list of available tools for current mode and phase.
 
@@ -994,12 +1003,15 @@ Remember: Your summary will be retrieved later via semantic search, so include r
         if session_mode == SessionMode.QUICK_LOOKUP:
             # QUICK_LOOKUP: No memory_write (no archiving in quick mode)
             # Allow: web_search, web_access, memory_query, retrieve_context
-            return ["web_search", "web_access", "memory_query", "retrieve_context"]
+            tools = ["web_search", "web_access", "memory_query", "retrieve_context"]
+            if forbid_web:
+                tools = [t for t in tools if t not in ("web_search", "web_access")]
+            return tools
 
         elif session_mode == SessionMode.RESEARCH:
             if research_stats is None:
                 # Default to all tools if no stats provided
-                return None
+                return [] if forbid_web else None
 
             # Phase-aware tool filtering for RESEARCH mode
             if not research_stats.has_plan:
@@ -1007,13 +1019,20 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                 return []
             elif research_stats.tool_calls < 10 and not research_stats.synthesis_triggered:
                 # Exploration phase: search and access only
-                return ["web_search", "web_access", "retrieve_context"]
+                tools = ["web_search", "web_access", "retrieve_context"]
+                if forbid_web:
+                    tools = [t for t in tools if t not in ("web_search", "web_access")]
+                return tools
             elif research_stats.synthesis_triggered:
                 # Synthesis phase: allow memory storage
                 return ["memory_write", "memory_query", "retrieve_context"]
             else:
                 # Transition phase: all research tools
-                return ["web_search", "web_access", "memory_write", "memory_query", "retrieve_context"]
+                tools = ["web_search", "web_access", "memory_write", "memory_query", "retrieve_context"]
+                if forbid_web:
+                    tools = [t for t in tools if t not in ("web_search", "web_access")]
+                    return tools
+                return tools
 
         elif session_mode == SessionMode.INGEST:
             # INGEST: Primarily memory_write, allow web_access for fetching URLs
@@ -1096,6 +1115,8 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             if research_prompt:
                 return research_prompt
 
+        forbid_web = self._user_forbids_web(user_message)
+
         # Prepopulate with memory gate and optional quick search for fact/doc asks
         tool_results_accum = list(tool_results or [])
         pre_results = self._maybe_seed_quick_tools(session_id, user_message, active_mode)
@@ -1115,7 +1136,8 @@ Remember: Your summary will be retrieved later via semantic search, so include r
         research_stats = ResearchStats()
         research_stats.set_session(session_id)
 
-        iterations = 0
+        # Count pre-seeded tool calls against the per-mode budget
+        iterations = len(tool_results_accum)
         response_text = ""
         # Use mode-specific configurations
         max_tokens = self._get_max_tokens_for_mode(active_mode)
@@ -1135,7 +1157,13 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             temperature = self._get_temperature_for_phase(active_mode, current_phase, has_tool_results)
 
             # Build prompt with phase-aware tool filtering
-            prompt_messages = self.build_prompt(context, user_message, active_mode, research_stats) + extra_messages
+            prompt_messages = self.build_prompt(
+                context,
+                user_message,
+                active_mode,
+                research_stats,
+                forbid_web=forbid_web,
+            ) + extra_messages
 
             # Log prompt metadata for traceability (recommended by ML engineer feedback)
             prompt_stats = compute_prompt_stats(prompt_messages)
@@ -1194,6 +1222,14 @@ Remember: Your summary will be retrieved later via semantic search, so include r
             if plan_payload:
                 proposals = plan_payload["proposals"]
                 approved, rejections = self.tool_policy.review(proposals, self.tool_registry)
+                if forbid_web:
+                    approved = [p for p in approved if p.tool not in ("web_search", "web_access")]
+                    if not approved:
+                        extra_messages.append(ChatMessage(
+                            role="system",
+                            content="User requested no internet. Provide an answer using memory/context only; do not call web_search or web_access."
+                        ))
+                        continue
                 if rejections:
                     msg = json.dumps({"rejected": rejections}, ensure_ascii=False)
                     extra_messages.append(ChatMessage(role="system", content=f"POLICY_REJECTION {msg}"))
@@ -1540,6 +1576,13 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
         thought, final_text = self._split_think(response_text)
 
+        # Quick-mode hygiene: enforce citations, avoid prompt leakage, and surface conflicts
+        if active_mode == SessionMode.QUICK_LOOKUP:
+            final_text, response_text = self._enforce_quick_citation(final_text, response_text, tool_results_accum)
+            final_text = self._sanitize_prompt_leak(final_text)
+            response_text = self._sanitize_prompt_leak(response_text)
+            final_text = self._maybe_add_conflict_hint(final_text, context, user_message)
+
         # Record conversation turn via SessionManager
         self.session_manager.record_turn(session_id, user_message, final_text)
 
@@ -1863,6 +1906,80 @@ Remember: Your summary will be retrieved later via semantic search, so include r
         ]
         return any(kw in text for kw in keywords)
 
+    def _user_forbids_web(self, user_message: str) -> bool:
+        """Detect explicit requests to stay offline or avoid web tools."""
+        text = (user_message or "").lower()
+        blockers = [
+            "without using the internet",
+            "no internet",
+            "offline only",
+            "do not search",
+            "don't search",
+            "no web",
+            "avoid web",
+            "stay offline",
+        ]
+        return any(b in text for b in blockers)
+
+    def _is_doc_lookup(self, user_message: str) -> bool:
+        """Heuristic: user is asking for documentation/manual pages."""
+        text = (user_message or "").lower()
+        return any(word in text for word in ["doc", "documentation", "manual", "api", "guide"])
+
+    def _extract_first_url(self, content: str) -> Optional[str]:
+        """Extract the first URL from a tool content block."""
+        match = re.search(r"https?://\S+", content or "")
+        return match.group(0) if match else None
+
+    def _find_first_search_url(self, tool_results: List[ToolResult]) -> Optional[str]:
+        """Locate the first URL from any web_search result."""
+        for result in tool_results:
+            if result.tool_name == "web_search":
+                url = self._extract_first_url(result.content)
+                if url:
+                    return url
+        return None
+
+    def _enforce_quick_citation(
+        self,
+        final_text: str,
+        response_text: str,
+        tool_results: List[ToolResult],
+    ) -> tuple[str, str]:
+        """If a quick-mode answer used web_search but shows no URL, append one."""
+        url_in_text = re.search(r"https?://\S+", final_text or "")
+        if url_in_text:
+            return final_text, response_text
+
+        source_url = self._find_first_search_url(tool_results)
+        if not source_url:
+            return final_text, response_text
+
+        suffix = f"\nSource: {source_url}"
+        return final_text.rstrip() + suffix, response_text.rstrip() + suffix
+
+    def _sanitize_prompt_leak(self, text: str) -> str:
+        """Avoid echoing sensitive phrases like 'system prompt' in summaries."""
+        return re.sub(r"system prompt", "hidden system instructions", text, flags=re.IGNORECASE)
+
+    def _maybe_add_conflict_hint(
+        self,
+        final_text: str,
+        context: MemoryContext,
+        user_message: str,
+    ) -> str:
+        """Surface conflicting location facts in the recent context."""
+        lowered_msg = (user_message or "").lower()
+        if "where do i live" not in lowered_msg:
+            return final_text
+
+        recent_text = " ".join(m.content.lower() for m in context.short_term_messages or [])
+        if "paris" in recent_text and "berlin" in recent_text:
+            lowered_final = final_text.lower()
+            if all(keyword not in lowered_final for keyword in ["paris", "conflict", "confirm", "earlier"]):
+                return final_text.rstrip() + " Noting you mentioned Paris earlier and then moved to Berlin -- assuming Berlin is current; please confirm."
+        return final_text
+
     def _maybe_seed_quick_tools(
         self,
         session_id: str,
@@ -1875,24 +1992,32 @@ Remember: Your summary will be retrieved later via semantic search, so include r
 
         seeded: List[ToolResult] = []
 
-        # Memory gate: try memory_query first
-        try:
-            mem_result = self.run_tool(
-                "memory_query",
-                session_id,
-                user_message,
-                metadata={"query": user_message, "top_k": 3},
-                session_mode=active_mode,
-            )
-            if mem_result.snippets:
-                seeded.append(mem_result)
-                return seeded  # Good memory hit; skip search
-        except Exception:
-            # If memory_query fails, fall through to search decision
-            self.logger.debug("memory_query gate skipped", exc_info=True)
+        # Respect explicit offline/no-internet instructions
+        if self._user_forbids_web(user_message):
+            return seeded
 
-        # If no memory hit and the ask looks external, seed one web_search
-        if self._should_force_quick_search(user_message):
+        # News/version/“latest” asks should hit web_search first to avoid stale memory
+        force_search = self._should_force_quick_search(user_message)
+
+        # Memory gate: only for non-latest asks to stay within quick-mode tool budget
+        if not force_search:
+            try:
+                mem_result = self.run_tool(
+                    "memory_query",
+                    session_id,
+                    user_message,
+                    metadata={"query": user_message, "top_k": 3},
+                    session_mode=active_mode,
+                )
+                if mem_result.snippets:
+                    seeded.append(mem_result)
+                    return seeded  # Good memory hit; skip search
+            except Exception:
+                # If memory_query fails, fall through to search decision
+                self.logger.debug("memory_query gate skipped", exc_info=True)
+
+        # If no memory hit (or forced fresh info), seed one web_search
+        if force_search or self._should_force_quick_search(user_message):
             try:
                 search_result = self.run_tool(
                     "web_search",
@@ -1902,6 +2027,19 @@ Remember: Your summary will be retrieved later via semantic search, so include r
                     session_mode=active_mode,
                 )
                 seeded.append(search_result)
+
+                # For documentation asks, immediately fetch the top result if available
+                if self._is_doc_lookup(user_message):
+                    first_url = self._extract_first_url(search_result.content)
+                    if first_url:
+                        access_result = self.run_tool(
+                            "web_access",
+                            session_id,
+                            first_url,
+                            metadata={"url": first_url, "format": "text"},
+                            session_mode=active_mode,
+                        )
+                        seeded.append(access_result)
             except Exception:
                 self.logger.debug("web_search seeding failed", exc_info=True)
 

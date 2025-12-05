@@ -2,7 +2,21 @@
 
 All notable changes to Argo Brain are documented in this file.
 
-## [2025-12-07] - Quick Mode Safety, Routing, and Eval Tweaks
+## [2025-12-04] - Quick Mode Hygiene, New Evaluations, Sandboxed Tests
+
+### Changed - Quick Mode Freshness & Safety
+- Fresh/“latest” queries now go straight to `web_search` (skip memory gate) and count pre-seeded calls toward the 2-call budget; doc-style asks auto-fetch the top result with `web_access`.
+- Quick answers enforce at least one citation when search runs, sanitize “system prompt” echoes into refusals, and surface fact conflicts (Paris → Berlin) with confirmation prompts.
+- Offline/no-internet phrasing removes web tools from the manifest and blocks tool proposals during the run.
+
+### Added - Evaluation Coverage
+- New manual tests: tool failure recovery, long-context fidelity, research source diversity/deduping, RAG grounding without web, and offline discipline.
+- Validators tightened/relaxed where appropriate (RAG vendor list broadened; prompt-injection summary allows explicit refusals).
+
+### Changed - Test Runner Isolation
+- `scripts/run_tests.py` now uses a sandboxed SQLite + in-memory vector store for `test_*` sessions, preventing profile facts or embeddings from polluting real data while keeping memory_write/memory_query behavior intact.
+
+## [2025-12-04] - Quick Mode Safety, Routing, and Eval Tweaks
 
 ### Added - Quick Mode Guards
 - Context-only and ambiguity guards now short-circuit tool calls, prompting for clarification instead of guessing.

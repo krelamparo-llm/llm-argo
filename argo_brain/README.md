@@ -146,6 +146,13 @@ python scripts/chat_cli.py --mode research          # Research mode
 - **`research`**: Deep research with planning-first architecture, max 10 tool calls, synthesis with citations
 - **`ingest`**: Archive and summarize user-provided material
 
+Quick Lookup behavior:
+- Memory-first: tries to answer from stored context before using tools.
+- Clarify-first: asks for clarification on ambiguous or context-only prompts instead of guessing.
+- External facts/docs: may run a single `web_search` (max_results≈5) and, for docs, `web_access` to fetch a page; responses include citations.
+- Deep/broad asks: suggests switching to RESEARCH mode rather than stretching the 2-call budget.
+- Safety: refuses PII, local file/path or dangerous payloads; prompt-injection quotes are summarized as attacks with no tools.
+
 ### Ingestion CLIs
 
 ```bash
@@ -211,7 +218,7 @@ python -m pytest tests/test_research_tracker.py -v
 ARGO_DEBUG_RESEARCH=true python -m pytest tests/test_research_tracker.py -v
 ```
 
-### Manual Test Runner (research mode validation)
+### Manual Test Runner (with auto-validation & sandboxed state)
 ```bash
 # Run specific test case
 python scripts/run_tests.py --test TEST-005 --auto
@@ -223,7 +230,7 @@ python scripts/run_tests.py --test TEST-005 --auto --verbose
 ARGO_DEBUG_RESEARCH=true python scripts/run_tests.py --test TEST-005 --auto
 ```
 
-**Auto-validation**: In `--auto`, the runner now records per-turn responses to `/tmp/test_<id>_<session>_turnN.txt`, gathers tool runs/profile facts from SQLite, and applies heuristic checks per test (tool usage, citations, safety refusals, memory vs web). Failures include a reason for fast triage.
+**Auto-validation**: In `--auto`, the runner records per-turn responses to `/tmp/test_<id>_<session>_turnN.txt`, gathers tool runs/profile facts from a sandboxed SQLite DB, and applies heuristic checks per test (tool usage, citations, safety refusals, memory vs web). Failures include a reason for fast triage. Tests use an isolated in-memory vector store and temp SQLite, so profile facts and embeddings do not touch your real `.argo_data` state.
 
 ### Test Categories
 - `test_research_tracker.py` - ResearchStats tracking (17 tests)

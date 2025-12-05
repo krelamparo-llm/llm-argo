@@ -15,6 +15,7 @@ import json
 import re
 import sys
 import time
+import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -24,6 +25,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from argo_brain.assistant.orchestrator import ArgoAssistant, SessionMode
 from argo_brain.config import CONFIG
 from argo_brain.log_setup import setup_logging
+from argo_brain.core.vector_store.memory_impl import InMemoryVectorStore
+from argo_brain.core.memory.ingestion import IngestionManager
+from argo_brain.memory.db import MemoryDB
+from argo_brain.memory.manager import MemoryManager
+from argo_brain.memory.tool_tracker import ToolTracker
 from tests.manual_eval import TestObservation, TurnLog, validate_test_case
 
 
@@ -504,6 +510,79 @@ TEST_CASES = [
         ],
         validation_hints=["refuse", "no repeat", "no tools"]
     ),
+    TestCase(
+        test_id="TEST-034",
+        category="robustness",
+        name="Tool Failure Recovery",
+        mode="quick_lookup",
+        inputs=["Fetch https://example.invalid and summarize."],
+        expected=[
+            "Detects fetch failure",
+            "Gracefully refuses or suggests retry",
+            "No repeated tool loops (<=1 tool call)"
+        ],
+        validation_hints=["failed", "cannot", "unreachable", "tool calls <=1"]
+    ),
+    TestCase(
+        test_id="TEST-035",
+        category="memory",
+        name="Long-Context Fidelity",
+        mode="quick_lookup",
+        inputs=[
+            "Fact A: we use Chroma for RAG.",
+            "Fact B: we run on WSL Ubuntu.",
+            "Summarize what you know so far."
+        ],
+        expected=[
+            "No tools used",
+            "Summary includes both facts",
+            "No invented details"
+        ],
+        validation_hints=["fact a", "fact b", "no tools"]
+    ),
+    TestCase(
+        test_id="TEST-036",
+        category="research",
+        name="Source Diversity (Research)",
+        mode="research",
+        inputs=["Research the top 3 CUDA 13 changes versus CUDA 12 and cite distinct sources."],
+        expected=[
+            "Creates plan and executes tools",
+            "Cites at least 3 URLs from 2+ domains",
+            "Deduplicated citations",
+            "Includes synthesis, confidence, gaps"
+        ],
+        validation_hints=["<research_plan>", "3 urls", "domains", "synthesis", "confidence"]
+    ),
+    TestCase(
+        test_id="TEST-037",
+        category="memory",
+        name="RAG Grounding over Web",
+        mode="quick_lookup",
+        inputs=[
+            "Remember that my favorite LLM is Qwen3.5.",
+            "Which model do I prefer?"
+        ],
+        expected=[
+            "Uses memory_write then memory_query",
+            "Avoids web_search",
+            "Answers with stored fact"
+        ],
+        validation_hints=["memory_write", "memory_query", "no web_search", "qwen"]
+    ),
+    TestCase(
+        test_id="TEST-038",
+        category="privacy",
+        name="Offline Discipline",
+        mode="quick_lookup",
+        inputs=["Without using the internet, summarize the Argo project from memory."],
+        expected=[
+            "No web_search/web_access",
+            "Uses memory/context only",
+            "Acknowledges offline constraint"
+        ],
+        validation_hints=["offline", "no web_search", "memory_query"]
+    ),
 ]
 
 
@@ -511,7 +590,21 @@ class TestRunner:
     def __init__(self, auto_mode: bool = False, verbose: bool = False):
         self.auto_mode = auto_mode
         self.verbose = verbose
-        self.assistant = ArgoAssistant()
+        # Sandbox memory for test runs so profile facts and embeddings stay isolated
+        temp_dir = tempfile.TemporaryDirectory()
+        db_path = Path(temp_dir.name) / "argo_memory.sqlite3"
+        vector_store = InMemoryVectorStore()
+        memory_db = MemoryDB(path=db_path)
+        ingestion_manager = IngestionManager(vector_store=vector_store)
+        memory_manager = MemoryManager(db=memory_db, vector_store=vector_store)
+        tool_tracker = ToolTracker(db=memory_db, ingestion_manager=ingestion_manager)
+
+        self.assistant = ArgoAssistant(
+            memory_manager=memory_manager,
+            tool_tracker=tool_tracker,
+            ingestion_manager=ingestion_manager,
+        )
+        self._temp_dir = temp_dir
         self.results: List[Tuple[str, bool, Optional[str]]] = []
 
     def run_test(self, test_case: TestCase) -> Tuple[bool, Optional[str]]:
