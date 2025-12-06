@@ -124,6 +124,12 @@ cd /home/krela/llm-argo/llama.cpp
 python scripts/chat_cli.py                          # Random session
 python scripts/chat_cli.py --session mysession      # Named session
 python scripts/chat_cli.py --mode research          # Research mode
+
+### Browser Chat (Tailnet)
+
+- Start web service: `python -m scripts.chat_service --host 0.0.0.0 --port 3210` (optional: set `ARGO_WEB_TOKEN`; TLS via `ARGO_WEB_TLS_CERT/KEY` if desired).
+- Tailnet test: `curl -H "Authorization: Bearer $ARGO_WEB_TOKEN" http://<tailnet-host>:3210/health` (omit header if token unset).
+- UI: open `http://<tailnet-host>:3210/` from another Tailscale device (e.g., iPad). Enter the token if set, choose a session ID to share memory with the CLI.
 ```
 
 **REPL Commands:**

@@ -591,8 +591,8 @@ class TestRunner:
         self.auto_mode = auto_mode
         self.verbose = verbose
         # Sandbox memory for test runs so profile facts and embeddings stay isolated
-        temp_dir = tempfile.TemporaryDirectory()
-        db_path = Path(temp_dir.name) / "argo_memory.sqlite3"
+        self._temp_dir = tempfile.TemporaryDirectory()
+        db_path = Path(self._temp_dir.name) / "argo_memory.sqlite3"
         vector_store = InMemoryVectorStore()
         memory_db = MemoryDB(path=db_path)
         ingestion_manager = IngestionManager(vector_store=vector_store)
@@ -604,7 +604,6 @@ class TestRunner:
             tool_tracker=tool_tracker,
             ingestion_manager=ingestion_manager,
         )
-        self._temp_dir = temp_dir
         self.results: List[Tuple[str, bool, Optional[str]]] = []
 
     def run_test(self, test_case: TestCase) -> Tuple[bool, Optional[str]]:

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Argo Brain – Web Chat</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <div class="title">Argo Brain · Browser Chat</div>
+      <div class="status" id="status">Idle</div>
+    </header>
+
+    <section class="controls">
+      <label class="field">
+        <span>Auth token</span>
+        <input id="token" type="password" placeholder="Bearer token" autocomplete="off" />
+        <small>Stored in this browser only; required if ARGO_WEB_TOKEN is set.</small>
+      </label>
+      <label class="field">
+        <span>Session ID</span>
+        <input id="session" type="text" placeholder="e.g., research-1" autocomplete="off" />
+        <small>Reuse the same ID to share memory with the CLI.</small>
+      </label>
+      <label class="field">
+        <span>Mode</span>
+        <select id="mode">
+          <option value="quick_lookup">Quick lookup</option>
+          <option value="research">Research</option>
+          <option value="ingest">Ingest</option>
+        </select>
+        <small>Matches the CLI modes.</small>
+      </label>
+      <button id="save-prefs" class="ghost">Save prefs</button>
+    </section>
+
+    <main class="chat" id="chat-log" aria-live="polite"></main>
+
+    <form id="composer" class="composer">
+      <textarea id="prompt" rows="3" placeholder="Ask Argo anything…" required></textarea>
+      <div class="actions">
+        <button type="submit" id="send">Send</button>
+        <button type="button" id="stop" class="ghost" disabled>Stop</button>
+      </div>
+    </form>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

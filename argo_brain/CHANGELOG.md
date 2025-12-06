@@ -2,6 +2,19 @@
 
 All notable changes to Argo Brain are documented in this file.
 
+## [2025-12-05] - Browser Chat via Tailnet
+
+### Added
+- FastAPI-based web chat service (`scripts/chat_service.py`, `argo_brain/web/app.py`) exposing the assistant over HTTP with SSE-style streaming.
+- Static browser UI (`argo_brain/web/static`) tuned for mobile/tablet with session selection and optional bearer auth.
+
+### Changed
+- README now documents Tailnet browser access and health checks.
+- Dependencies updated to include `fastapi` and `uvicorn[standard]`.
+
+### Testing
+- No automated tests added yet (manual verification in browser/CLI).
+
 ## [2025-12-04] - Quick Mode Hygiene, New Evaluations, Sandboxed Tests
 
 ### Changed - Quick Mode Freshness & Safety

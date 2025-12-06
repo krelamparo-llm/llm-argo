@@ -6,3 +6,5 @@ requests
 tomli
 numpy
 ddgs
+fastapi
+uvicorn[standard]
