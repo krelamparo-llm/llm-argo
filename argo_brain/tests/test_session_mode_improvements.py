@@ -156,7 +156,8 @@ def test_dynamic_tool_availability():
 
     # RESEARCH planning phase
     print("\nRESEARCH mode - Planning phase:")
-    research_stats_planning = {"has_plan": False, "tool_calls": 0}
+    from argo_brain.assistant.research_tracker import ResearchStats
+    research_stats_planning = ResearchStats()  # has_plan=False by default
     planning_tools = assistant._get_available_tools_for_mode(SessionMode.RESEARCH, research_stats_planning)
     print(f"  Available tools: {planning_tools}")
     assert planning_tools == [], "RESEARCH planning should have no tools"
@@ -164,7 +165,9 @@ def test_dynamic_tool_availability():
 
     # RESEARCH exploration phase
     print("\nRESEARCH mode - Exploration phase:")
-    research_stats_explore = {"has_plan": True, "tool_calls": 5, "synthesis_triggered": False}
+    research_stats_explore = ResearchStats()
+    research_stats_explore.has_plan = True
+    research_stats_explore.tool_calls = 5
     explore_tools = assistant._get_available_tools_for_mode(SessionMode.RESEARCH, research_stats_explore)
     print(f"  Available tools: {explore_tools}")
     assert explore_tools is not None, "RESEARCH exploration should filter tools"
@@ -175,7 +178,10 @@ def test_dynamic_tool_availability():
 
     # RESEARCH synthesis phase
     print("\nRESEARCH mode - Synthesis phase:")
-    research_stats_synthesis = {"has_plan": True, "tool_calls": 10, "synthesis_triggered": True}
+    research_stats_synthesis = ResearchStats()
+    research_stats_synthesis.has_plan = True
+    research_stats_synthesis.tool_calls = 10
+    research_stats_synthesis.synthesis_triggered = True
     synthesis_tools = assistant._get_available_tools_for_mode(SessionMode.RESEARCH, research_stats_synthesis)
     print(f"  Available tools: {synthesis_tools}")
     assert synthesis_tools is not None, "RESEARCH synthesis should filter tools"

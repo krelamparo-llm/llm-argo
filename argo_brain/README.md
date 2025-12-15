@@ -251,6 +251,7 @@ ARGO_DEBUG_RESEARCH=true python scripts/run_tests.py --test TEST-005 --auto
 export ARGO_DEBUG_RESEARCH=true   # Research mode logging
 export ARGO_DEBUG_TOOLS=true      # Tool execution logging
 export ARGO_DEBUG_ALL=true        # All debug logging
+export ARGO_DEBUG_PROMPT=true     # Dump full prompts to /tmp/argo_prompt_*.txt
 ```
 
 ## Data Locations

@@ -344,6 +344,12 @@ Always bias toward **clarity, safety, and small steps** over cleverness or sweep
 - Use LLM-readable compact tags from `logging_utils.py` (e.g., `[R:URL]`, `[STATE:->]`)
 - Debug logging controlled by environment variables (`ARGO_DEBUG_*`)
 
+### Debug Environment Variables
+- `ARGO_DEBUG_RESEARCH` - Research mode logging
+- `ARGO_DEBUG_TOOLS` - Tool execution logging
+- `ARGO_DEBUG_ALL` - All debug logging
+- `ARGO_DEBUG_PROMPT` - Dump full prompts to `/tmp/argo_prompt_*.txt`
+
 ---
 
 ## Daily Work Hygiene

@@ -2,6 +2,63 @@
 
 All notable changes to Argo Brain are documented in this file.
 
+## [2025-12-14] - Prompt Deduplication & Response Quality Fix
+
+### Problem Addressed
+
+Response quality was severely degraded by content duplication in prompts:
+- Tool results appeared twice (in MemoryContext AND extra_messages)
+- `extra_messages` accumulated across loop iterations without clearing
+- Session summary overlapped with short-term message history
+- Tool instructions duplicated in base prompt AND mode description
+- No URL-level deduplication across RAG, web cache, and tool results
+
+The LLM was seeing the same facts 3-5 times, causing redundant responses.
+
+### Changed - Prompt Assembly (BREAKING)
+
+- `extra_messages` now rebuilt fresh each iteration via new `_build_tool_context()` helper
+- Tool instructions consolidated to mode description only (removed from base prompt)
+- Session summary excluded when short-term buffer is small (prevents overlap)
+- New `tool_calls_history` tracking replaces message accumulation
+
+### Added - Deduplication System
+
+- URL-based deduplication across all context sources (RAG, web cache, tool results)
+- Content-hash deduplication for chunks without URLs
+- Freshness-priority ordering: tool results > web cache > RAG
+- New methods: `_deduplicate_chunks()`, `_normalize_url()`, `_content_hash()`
+
+### Added - Debug Tools
+
+- `ARGO_DEBUG_PROMPT=true` dumps full prompt to `/tmp/argo_prompt_*.txt`
+- Easier debugging of prompt content and duplication
+
+### Changed - Compaction Thresholds
+
+- RESEARCH mode: compress after 2 results (was 4)
+- QUICK_LOOKUP mode: compress after 3 results (was 6)
+- More aggressive early compression reduces context bloat
+
+### Documentation
+
+- New `docs/REFACTOR_2024_PROMPT_DEDUPLICATION.md`:
+  - Before/after prompt examples
+  - File-by-file change summary
+  - Debug tool usage guide
+
+### Testing
+
+- All 78 existing tests pass
+- Fixed `test_session_mode_improvements.py` to use `ResearchStats` objects
+
+### Breaking Changes
+
+- Prompt format changed (affects any prompt tuning)
+- Web chat service may need verification (functionality preserved)
+
+---
+
 ## [2025-12-05] - Browser Chat via Tailnet
 
 ### Added

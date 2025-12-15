@@ -10,11 +10,12 @@ Session management and tool tracking are delegated to SessionManager and ToolTra
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
 
@@ -146,6 +147,12 @@ class MemoryManager:
                 "web_trust": self._summarize_trust(web_cache_chunks),
             },
         )
+        # Deduplicate chunks by URL (Phase 1.4 refactor)
+        # Priority: tool_results > web_cache > rag (freshness order)
+        rag_chunks, web_cache_chunks = self._deduplicate_chunks(
+            rag_chunks, web_cache_chunks, tool_results or []
+        )
+
         return MemoryContext(
             short_term_messages=short_term,
             session_summary=summary,
@@ -154,6 +161,125 @@ class MemoryManager:
             web_cache_chunks=web_cache_chunks,
             tool_results=tool_results if tool_results is not None else [],
         )
+
+    def _deduplicate_chunks(
+        self,
+        rag_chunks: List[RetrievedChunk],
+        web_cache_chunks: List[RetrievedChunk],
+        tool_results: List[ToolResult],
+    ) -> Tuple[List[RetrievedChunk], List[RetrievedChunk]]:
+        """Remove duplicate content across context sources.
+
+        Deduplication priority (freshest wins):
+        1. Tool results (current conversation)
+        2. Web cache (recent tool outputs)
+        3. RAG chunks (knowledge base)
+
+        Uses both URL-based and content-hash deduplication.
+
+        Args:
+            rag_chunks: Chunks from knowledge base
+            web_cache_chunks: Chunks from web cache
+            tool_results: Tool results from current conversation
+
+        Returns:
+            Deduplicated (rag_chunks, web_cache_chunks) tuple
+        """
+        seen_urls: Set[str] = set()
+        seen_hashes: Set[str] = set()
+
+        # First, collect URLs and hashes from tool results (highest priority)
+        for result in tool_results:
+            if result.metadata:
+                url = result.metadata.get("url")
+                if url:
+                    seen_urls.add(self._normalize_url(url))
+            # Also hash content to catch duplicates without URLs
+            if result.content:
+                seen_hashes.add(self._content_hash(result.content))
+
+        # Deduplicate web_cache_chunks (second priority)
+        deduped_web_cache: List[RetrievedChunk] = []
+        for chunk in web_cache_chunks:
+            url = chunk.metadata.get("url") if chunk.metadata else None
+            normalized_url = self._normalize_url(url) if url else None
+            content_hash = self._content_hash(chunk.text)
+
+            if normalized_url and normalized_url in seen_urls:
+                self.logger.debug(f"Dedup: skipping web_cache chunk (URL duplicate): {url[:60]}...")
+                continue
+            if content_hash in seen_hashes:
+                self.logger.debug("Dedup: skipping web_cache chunk (content hash duplicate)")
+                continue
+
+            # Keep this chunk and mark as seen
+            if normalized_url:
+                seen_urls.add(normalized_url)
+            seen_hashes.add(content_hash)
+            deduped_web_cache.append(chunk)
+
+        # Deduplicate rag_chunks (lowest priority)
+        deduped_rag: List[RetrievedChunk] = []
+        for chunk in rag_chunks:
+            url = chunk.metadata.get("url") if chunk.metadata else None
+            normalized_url = self._normalize_url(url) if url else None
+            content_hash = self._content_hash(chunk.text)
+
+            if normalized_url and normalized_url in seen_urls:
+                self.logger.debug(f"Dedup: skipping RAG chunk (URL duplicate): {url[:60]}...")
+                continue
+            if content_hash in seen_hashes:
+                self.logger.debug("Dedup: skipping RAG chunk (content hash duplicate)")
+                continue
+
+            # Keep this chunk and mark as seen
+            if normalized_url:
+                seen_urls.add(normalized_url)
+            seen_hashes.add(content_hash)
+            deduped_rag.append(chunk)
+
+        # Log deduplication stats
+        rag_removed = len(rag_chunks) - len(deduped_rag)
+        web_removed = len(web_cache_chunks) - len(deduped_web_cache)
+        if rag_removed > 0 or web_removed > 0:
+            self.logger.info(
+                "Context deduplication",
+                extra={
+                    "rag_removed": rag_removed,
+                    "web_cache_removed": web_removed,
+                    "rag_kept": len(deduped_rag),
+                    "web_cache_kept": len(deduped_web_cache),
+                },
+            )
+
+        return deduped_rag, deduped_web_cache
+
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL for deduplication comparison.
+
+        Removes trailing slashes, fragments, and normalizes case.
+        """
+        if not url:
+            return ""
+        # Remove fragment
+        url = url.split("#")[0]
+        # Remove trailing slash
+        url = url.rstrip("/")
+        # Lowercase for comparison
+        return url.lower()
+
+    def _content_hash(self, text: str) -> str:
+        """Generate content hash for deduplication.
+
+        Normalizes whitespace and case before hashing.
+        """
+        if not text:
+            return ""
+        # Normalize: lowercase, collapse whitespace
+        normalized = " ".join(text.lower().split())
+        # Take first 1000 chars to avoid hashing huge content
+        normalized = normalized[:1000]
+        return hashlib.md5(normalized.encode()).hexdigest()[:12]
 
     def _retrieve_web_cache(self, query: str) -> List[RetrievedChunk]:
         mem_cfg = self.config.memory
