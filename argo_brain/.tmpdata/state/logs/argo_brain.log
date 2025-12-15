@@ -1,0 +1,623 @@
+2025-12-14T22:12:39 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:39 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Scanning for models in /mnt/d/llm/models
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-32b: temp=0.6, top_p=None, top_k=None
+2025-12-14T22:12:39 [INFO] argo_brain.model_prompts - Using default XML format for model: qwen3-32b
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Detected model 'qwen3-32b': tokenizer=True, template=False, parser=False
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:12:39 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b/argo_prompts.yaml: name=qwen3-coder-30b, format=xml, thinking=True
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b: format=xml, thinking=True
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b': tokenizer=True, template=True, parser=True
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b-unsloth: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:12:39 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b-unsloth/argo_prompts.yaml: name=qwen3-coder-30b-unsloth, format=json, thinking=False
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b-unsloth: format=json, thinking=False
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b-unsloth': tokenizer=False, template=False, parser=False
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:12:39 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:12:39 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:12:39 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:12:39 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=2, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=N, u=3, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=3, t=Y) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #5/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:12:40 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:12:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:12:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:12:40 [INFO] argo_brain.tools.web - WebAccessTool fetched [session=s1] [session=s1]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Scanning for models in /mnt/d/llm/models
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-32b: temp=0.6, top_p=None, top_k=None
+2025-12-14T22:13:34 [INFO] argo_brain.model_prompts - Using default XML format for model: qwen3-32b
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Detected model 'qwen3-32b': tokenizer=True, template=False, parser=False
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:13:34 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b/argo_prompts.yaml: name=qwen3-coder-30b, format=xml, thinking=True
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b: format=xml, thinking=True
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b': tokenizer=True, template=True, parser=True
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b-unsloth: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:13:34 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b-unsloth/argo_prompts.yaml: name=qwen3-coder-30b-unsloth, format=json, thinking=False
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b-unsloth: format=json, thinking=False
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b-unsloth': tokenizer=False, template=False, parser=False
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=2, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=N, u=3, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=3, t=Y) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #5/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:13:34 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:13:34 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:13:34 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:13:35 [INFO] argo_brain.tools.web - WebAccessTool fetched [session=s1] [session=s1]
+2025-12-14T22:14:37 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:37 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:37 [INFO] argo_brain.model_registry - Scanning for models in /mnt/d/llm/models
+2025-12-14T22:14:37 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-32b: temp=0.6, top_p=None, top_k=None
+2025-12-14T22:14:37 [INFO] argo_brain.model_prompts - Using default XML format for model: qwen3-32b
+2025-12-14T22:14:37 [INFO] argo_brain.model_registry - Detected model 'qwen3-32b': tokenizer=True, template=False, parser=False
+2025-12-14T22:14:37 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:14:38 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b/argo_prompts.yaml: name=qwen3-coder-30b, format=xml, thinking=True
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b: format=xml, thinking=True
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b': tokenizer=True, template=True, parser=True
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b-unsloth: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:14:38 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b-unsloth/argo_prompts.yaml: name=qwen3-coder-30b-unsloth, format=json, thinking=False
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b-unsloth: format=json, thinking=False
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b-unsloth': tokenizer=False, template=False, parser=False
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=2, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=N, u=3, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=3, t=Y) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #5/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:14:38 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:14:38 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:14:38 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:14:38 [INFO] argo_brain.tools.web - WebAccessTool fetched [session=s1] [session=s1]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Scanning for models in /mnt/d/llm/models
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-32b: temp=0.6, top_p=None, top_k=None
+2025-12-14T22:15:21 [INFO] argo_brain.model_prompts - Using default XML format for model: qwen3-32b
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Detected model 'qwen3-32b': tokenizer=True, template=False, parser=False
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:15:21 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b/argo_prompts.yaml: name=qwen3-coder-30b, format=xml, thinking=True
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b: format=xml, thinking=True
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b': tokenizer=True, template=True, parser=True
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b-unsloth: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:15:21 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b-unsloth/argo_prompts.yaml: name=qwen3-coder-30b-unsloth, format=json, thinking=False
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b-unsloth: format=json, thinking=False
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b-unsloth': tokenizer=False, template=False, parser=False
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=2, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=N, u=3, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=3, t=Y) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #5/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:15:21 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:15:21 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:15:21 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:15:21 [INFO] argo_brain.tools.web - WebAccessTool fetched [session=s1] [session=s1]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Scanning for models in /mnt/d/llm/models
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-32b: temp=0.6, top_p=None, top_k=None
+2025-12-14T22:16:07 [INFO] argo_brain.model_prompts - Using default XML format for model: qwen3-32b
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Detected model 'qwen3-32b': tokenizer=True, template=False, parser=False
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:16:07 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b/argo_prompts.yaml: name=qwen3-coder-30b, format=xml, thinking=True
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b: format=xml, thinking=True
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b': tokenizer=True, template=True, parser=True
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b-unsloth: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:16:07 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b-unsloth/argo_prompts.yaml: name=qwen3-coder-30b-unsloth, format=json, thinking=False
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b-unsloth: format=json, thinking=False
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b-unsloth': tokenizer=False, template=False, parser=False
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=2, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=N, u=3, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=3, t=Y) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #5/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:16:07 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:16:07 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:16:07 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:16:07 [INFO] argo_brain.tools.web - WebAccessTool fetched [session=s1] [session=s1]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Scanning for models in /mnt/d/llm/models
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-32b: temp=0.6, top_p=None, top_k=None
+2025-12-14T22:17:53 [INFO] argo_brain.model_prompts - Using default XML format for model: qwen3-32b
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Detected model 'qwen3-32b': tokenizer=True, template=False, parser=False
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:17:53 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b/argo_prompts.yaml: name=qwen3-coder-30b, format=xml, thinking=True
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b: format=xml, thinking=True
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b': tokenizer=True, template=True, parser=True
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b-unsloth: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:17:53 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b-unsloth/argo_prompts.yaml: name=qwen3-coder-30b-unsloth, format=json, thinking=False
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b-unsloth: format=json, thinking=False
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b-unsloth': tokenizer=False, template=False, parser=False
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=2, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=N, u=3, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=3, t=Y) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #5/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:17:53 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:17:53 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:17:53 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:17:53 [INFO] argo_brain.tools.web - WebAccessTool fetched [session=s1] [session=s1]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Scanning for models in /mnt/d/llm/models
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-32b: temp=0.6, top_p=None, top_k=None
+2025-12-14T22:29:40 [INFO] argo_brain.model_prompts - Using default XML format for model: qwen3-32b
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Detected model 'qwen3-32b': tokenizer=True, template=False, parser=False
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:29:40 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b/argo_prompts.yaml: name=qwen3-coder-30b, format=xml, thinking=True
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b: format=xml, thinking=True
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b': tokenizer=True, template=True, parser=True
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Extracted recommendations from README for qwen3-coder-30b-unsloth: temp=0.7, top_p=0.8, top_k=20
+2025-12-14T22:29:40 [INFO] argo_brain.model_prompts - Loaded prompt config from /mnt/d/llm/models/qwen3-coder-30b-unsloth/argo_prompts.yaml: name=qwen3-coder-30b-unsloth, format=json, thinking=False
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Loaded argo_prompts for qwen3-coder-30b-unsloth: format=json, thinking=False
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Detected model 'qwen3-coder-30b-unsloth': tokenizer=False, template=False, parser=False
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Executing tool [session=test_session, tool=sleep_tool] [session=test_session, tool=sleep_tool]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=1, parallel_total=2]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - PARALLEL_EXEC_RESULT [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2] [session=test_session, tool=sleep_tool, path=parallel, parallel_index=0, parallel_total=2]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=2, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=N, u=3, t=N) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.DECISION] synth=N (p=Y, u=3, t=Y) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #5/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=test-session] [session=test-session]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=integration-test] [session=integration-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #4/3 (p=i) [session=integration-test] [session=integration-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #1/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] #2/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=b) [session=batch-test] [session=batch-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant.research_tracker - [LogTag.RESEARCH_URL] ✓ #3/3 (p=i) [session=individual-test] [session=individual-test]
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:29:40 [WARNING] argo_brain.tool_policy - Tool calls rejected
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Active LLM model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Auto-configuring for model: qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Model qwen3-coder-30b-unsloth has no custom tool parser, using default JSON parser
+2025-12-14T22:29:40 [INFO] argo_brain.model_registry - Auto-configured model qwen3-coder-30b-unsloth: has_tokenizer=False, has_custom_parser=False, sampling={'temperature': 0.7, 'top_p': 0.8, 'top_k': 20, 'repetition_penalty': 1.05, 'max_tokens': 65536}
+2025-12-14T22:29:40 [INFO] argo_brain.assistant - Model configuration: format=JSON, has_tokenizer=False, has_parser=True, thinking=False, prompt_config=qwen3-coder-30b-unsloth
+2025-12-14T22:29:40 [INFO] argo_brain.tools.web - WebAccessTool fetched [session=s1] [session=s1]
